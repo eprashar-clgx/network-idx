@@ -1,3 +1,25 @@
+# Project-specific Python-related ignores
+# Python / Poetry
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.env
+
+# Jupyter Notebooks
+.ipynb_checkpoints/
+
+# IDEs (VSCode, PyCharm)
+.vscode/
+.idea/
+
+# Data (Ignore all files inside data folders, but keep the folders themselves)
+data/raw/**/*
+data/processed/**/*
+!data/raw/**/.gitkeep
+!data/processed/**/.gitkeep
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
