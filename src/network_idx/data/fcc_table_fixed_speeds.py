@@ -1,13 +1,5 @@
 """
 FCC Broadband Map — Playwright Downloader
-==========================================
-Downloads Fixed Broadband Availability Data (Cable / Copper / Fiber)
-for any set of US states/territories.
-
-Install dependencies:
-    pip install playwright
-    playwright install chromium
-
 Usage (edit the variables at the bottom, then run):
     python fcc_downloader_playwright.py
 
@@ -19,94 +11,34 @@ Or import and call directly:
         output_dir="fcc_data",
     )
 """
-
+import argparse
+import logging
+import sys
+import os
 import time
 from pathlib import Path
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
+from network_idx.constants import (FCC_URL,
+                                   FIXED_TECHNOLOGIES_FOR_DOWNLOAD,
+                                   STATE_FIPS)
 
+# Adding logging for better visibility into the process
+logging.basicConfig(
+    level=logging.INFO, 
+    format="%(asctime)s - %(levelname)s - %(message)s"
+    )
+logger = logging.getLogger(__name__)
 
-# ── FIPS code map (from the FCC dropdown HTML) ───────────────────────────────
-# These are the <option value="..."> attributes in the state <select>.
-# Used to select a state programmatically without fragile text matching.
+# Define file path to enable constants import regardless of current working directory
+# Importing with package name<constants> is a better approach so commented this out
+# sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-FIPS = {
-    "Alabama":                                      "01",
-    "Alaska":                                       "02",
-    "Arizona":                                      "04",
-    "Arkansas":                                     "05",
-    "California":                                   "06",
-    "Colorado":                                     "08",
-    "Connecticut":                                  "09",
-    "Delaware":                                     "10",
-    "District of Columbia":                         "11",
-    "Florida":                                      "12",
-    "Georgia":                                      "13",
-    "Hawaii":                                       "15",
-    "Idaho":                                        "16",
-    "Illinois":                                     "17",
-    "Indiana":                                      "18",
-    "Iowa":                                         "19",
-    "Kansas":                                       "20",
-    "Kentucky":                                     "21",
-    "Louisiana":                                    "22",
-    "Maine":                                        "23",
-    "Maryland":                                     "24",
-    "Massachusetts":                                "25",
-    "Michigan":                                     "26",
-    "Minnesota":                                    "27",
-    "Mississippi":                                  "28",
-    "Missouri":                                     "29",
-    "Montana":                                      "30",
-    "Nebraska":                                     "31",
-    "Nevada":                                       "32",
-    "New Hampshire":                                "33",
-    "New Jersey":                                   "34",
-    "New Mexico":                                   "35",
-    "New York":                                     "36",
-    "North Carolina":                               "37",
-    "North Dakota":                                 "38",
-    "Ohio":                                         "39",
-    "Oklahoma":                                     "40",
-    "Oregon":                                       "41",
-    "Pennsylvania":                                 "42",
-    "Rhode Island":                                 "44",
-    "South Carolina":                               "45",
-    "South Dakota":                                 "46",
-    "Tennessee":                                    "47",
-    "Texas":                                        "48",
-    "Utah":                                         "49",
-    "Vermont":                                      "50",
-    "Virginia":                                     "51",
-    "Washington":                                   "53",
-    "West Virginia":                                "54",
-    "Wisconsin":                                    "55",
-    "Wyoming":                                      "56",
-    "American Samoa":                               "60",
-    "Guam":                                         "66",
-    "Commonwealth of the Northern Mariana Islands": "69",
-    "Puerto Rico":                                  "72",
-    "United States Virgin Islands":                 "78",
-}
+# ── Core download function 
 
-# ── Constants ─────────────────────────────────────────────────────────────────
-
-FCC_URL = "https://broadbandmap.fcc.gov/data-download/nationwide-data?version=jun2025&pubDataVer=jun2025"
-
-# Technology names must match the text in the first <td> of each table row
-# exactly as it appears on the page.
-VALID_TECHNOLOGIES = [
-    "Cable",
-    "Copper",
-    "Fiber to the Premises",
-]
-
-
-# ── Core download function ────────────────────────────────────────────────────
-
-def download_fcc_data(
-    states: list[str] | None = None,
-    technologies: list[str] | None = None,
-    output_dir: str | Path = "fcc_data",
+def download_fcc_speeds(
+    states: list[str],
+    technologies: list[str],
+    output_dir: str | Path = r"data/raw/fcc/speeds",
     overwrite: bool = False,
     headless: bool = True,
     pause_seconds: float = 2.0,
@@ -116,9 +48,8 @@ def download_fcc_data(
 
     Parameters
     ----------
-    states        : State/territory names. Defaults to all 56 entries.
-    technologies  : Technology names. Defaults to all three:
-                    ["Cable", "Copper", "Fiber to the Premises"]
+    states        : State/territory names. Defaults to Alabama.
+    technologies  : Technology names ["Cable", "Copper", "Fiber to the Premises"]. Defaults to Fiber                    
     output_dir    : Folder to save downloaded .zip files into.
     overwrite     : If False, skip combinations already saved to disk.
     headless      : If False, opens a visible browser window (useful for debugging).
@@ -128,29 +59,25 @@ def download_fcc_data(
     -------
     List of Paths to successfully downloaded files.
     """
-    states       = states       or list(FIPS.keys())
-    technologies = technologies or VALID_TECHNOLOGIES
-    output_dir   = Path(output_dir)
+    states = states
+    technologies = technologies
+    output_dir = Path(output_dir)
+
+    # Check if output directory exists, if not create it
+    # TODO: check if this line needs to be modified
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Validate inputs up front
-    bad_states = [s for s in states if s not in FIPS]
-    if bad_states:
-        raise ValueError(f"Unknown state(s): {bad_states}\nValid: {list(FIPS.keys())}")
-
-    bad_tech = [t for t in technologies if t not in VALID_TECHNOLOGIES]
-    if bad_tech:
-        raise ValueError(f"Unknown technology/ies: {bad_tech}\nValid: {VALID_TECHNOLOGIES}")
-
+    # Define tasks / number of files to download upfront
     total   = len(states) * len(technologies)
     saved   = []
     counter = 0
 
-    print(f"\nFCC Broadband Playwright Downloader")
-    print(f"  States       : {len(states)}")
-    print(f"  Technologies : {technologies}")
-    print(f"  Output dir   : {output_dir.resolve()}")
-    print(f"  Total files  : {total}\n")
+    # Log the download configuration
+    logger.info(f"FCC Broadband Playwright Downloader")
+    logger.info(f"  States       : {len(states)}")
+    logger.info(f"  Technologies : {technologies}")
+    logger.info(f"  Total files  : {total}\n")
+
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=headless, channel="chrome")
@@ -164,10 +91,10 @@ def download_fcc_data(
         print("  Page loaded.\n")
 
         for state in states:
-            fips = FIPS[state]
+            fips = STATE_FIPS[state]
             safe = state.replace(" ", "_")
 
-            print(f"── {state} (FIPS {fips}) ──")
+            logger.info(f"Processing state: {state} (FIPS: {fips})")
 
             try:
                 # Select the state
@@ -182,11 +109,13 @@ def download_fcc_data(
                     "tr td.align-middle",
                     timeout=15_000,
                 )
+                # TODO: wait constants can be passed in the function or should they be static?
                 page.wait_for_timeout(1000)
             except PlaywrightTimeout:
                 print(f"  [ERROR] Timed out waiting for table after selecting {state}")
                 continue
 
+            logger.info(f"  State '{state}' loaded, processing technologies...")
             for tech in technologies:
                 counter += 1
                 safe_tech = tech.replace(" ", "_")
@@ -195,7 +124,7 @@ def download_fcc_data(
                     print(f"  [{counter}/{total}] [SKIP] {state} / {tech} already exists")
                     continue
 
-                print(f"  [{counter}/{total}] [GET]  {state} / {tech}", end=" ... ")
+                logger.info(f"  [{counter}/{total}] Downloading {state} / {tech}...")
 
                 try:
                     row_button = page.locator(
@@ -212,7 +141,7 @@ def download_fcc_data(
 
                     download.save_as(dest)
                     size_mb = dest.stat().st_size / (1024 * 1024)
-                    print(f"saved → {dest.name} ({size_mb:.1f} MB)")
+                    logger.info(f"    Downloaded '{dest.name}' ({size_mb:.2f} MB)")
                     saved.append(dest)
 
                 except PlaywrightTimeout:
@@ -225,38 +154,59 @@ def download_fcc_data(
 
         browser.close()
 
-    print(f"\nDone. {len(saved)}/{total} files saved to '{output_dir}/'")
+    logger.info(f"\nDownload complete. {len(saved)}/{total} files saved to '{output_dir}'.")
     return saved
 
 
-# ── CLI entry point ───────────────────────────────────────────────────────────
+# ── CLI entry point 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="Download FCC Fixed Broadband Availability files using a headless browser."
+    )
 
-    # ── Edit these to control what gets downloaded ────────────────────────────
-
-    STATES = [
-        "Alabama",
-        #"Indiana",
-    ]
-
-    TECHNOLOGIES = [
-        #"Cable",
-        #"Copper",
-        "Fiber to the Premises",
-    ]
+    parser.add_argument(
+        "--states", type=str, nargs="+", default=["Alabama"],
+        choices=STATE_FIPS.keys(),
+        help=f"States for download - one or more of of: {list(STATE_FIPS.keys())}"
+        )
     
-    OUTPUT_DIR = r"data\raw\fcc"
+    parser.add_argument(
+        "--all", action="store_true", default=False,
+        help="Download data for all states (overrides --states)"
+        )
+    
+    parser.add_argument(
+        "--technologies", type=str, nargs="+", default=["Fiber to the Premises"],
+        choices=FIXED_TECHNOLOGIES_FOR_DOWNLOAD,
+        )
+    
+    parser.add_argument(
+        "--output-dir", type=Path, default=r"data\raw\fcc\speeds",
+        help="Data directory to dump .zip files into. Defaults to 'data/raw/fcc/speeds"
+    )
 
     # Set headless=False to watch the browser — useful for debugging
     HEADLESS = False
 
-    # ─────────────────────────────────────────────────────────────────────────
-    download_fcc_data(
-        states=STATES,
-        technologies=TECHNOLOGIES,
-        output_dir=OUTPUT_DIR,
-        overwrite=False,
+    args = parser.parse_args()
+
+    # Default states should be Alabama or whatever the user enters
+    # However, value should be over-written if the user mentions all
+    if args.all:
+        args.states = list(STATE_FIPS.keys())
+    
+    for state in args.states:
+        if state not in STATE_FIPS:
+            raise SystemExit(f"Invalid state: {state}. Must be one of: {list(STATE_FIPS.keys())}")
+        
+    for tech in args.technologies:
+        if tech not in FIXED_TECHNOLOGIES_FOR_DOWNLOAD:
+            raise SystemExit(f"Invalid technology: {tech}. Must be one of: {FIXED_TECHNOLOGIES_FOR_DOWNLOAD}")
+    
+    download_fcc_speeds(
+        states=args.states,
+        technologies=args.technologies,
+        output_dir=args.output_dir,
         headless=HEADLESS,
-        pause_seconds=2.0,
     )
