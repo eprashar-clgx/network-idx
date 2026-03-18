@@ -1,26 +1,22 @@
 """
 FCC Broadband Map — Playwright Downloader
-Usage (edit the variables at the bottom, then run):
-    python fcc_downloader_playwright.py
 
-Or import and call directly:
-    from fcc_downloader_playwright import download_fcc_data
-    download_fcc_data(
-        states=["Illinois", "Indiana"],
-        technologies=["Cable", "Copper", "Fiber to the Premises"],
-        output_dir="fcc_data",
-    )
+Description
+
+
+Usage:
 """
 import argparse
 import logging
-import sys
-import os
+#import sys
+#import os
 import time
 from pathlib import Path
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
 from network_idx.constants import (FCC_URL,
                                    FIXED_TECHNOLOGIES_FOR_DOWNLOAD,
                                    STATE_FIPS)
+from network_idx.config import RAW_DIR_FCC_SPEEDS
 
 # Adding logging for better visibility into the process
 logging.basicConfig(
@@ -38,7 +34,7 @@ logger = logging.getLogger(__name__)
 def download_fcc_speeds(
     states: list[str],
     technologies: list[str],
-    output_dir: str | Path = r"data/raw/fcc/speeds",
+    output_dir: Path,
     overwrite: bool = False,
     headless: bool = True,
     pause_seconds: float = 2.0,
@@ -59,12 +55,7 @@ def download_fcc_speeds(
     -------
     List of Paths to successfully downloaded files.
     """
-    states = states
-    technologies = technologies
-    output_dir = Path(output_dir)
-
     # Check if output directory exists, if not create it
-    # TODO: check if this line needs to be modified
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Define tasks / number of files to download upfront
@@ -73,10 +64,10 @@ def download_fcc_speeds(
     counter = 0
 
     # Log the download configuration
-    logger.info(f"FCC Broadband Playwright Downloader")
+    logger.info("FCC Broadband Playwright Downloader")
     logger.info(f"  States       : {len(states)}")
     logger.info(f"  Technologies : {technologies}")
-    logger.info(f"  Total files  : {total}\n")
+    logger.info(f"  Total files  : {total}")
 
 
     with sync_playwright() as p:
@@ -84,11 +75,11 @@ def download_fcc_speeds(
         context = browser.new_context(accept_downloads=True)
         page    = context.new_page()
 
-        print("  Loading FCC page...")
+        logger.info("  Loading FCC page...")
         page.goto(FCC_URL, wait_until="domcontentloaded", timeout=60_000)
         # Wait for the dropdown to be present
         page.wait_for_selector("select#state", timeout=15_000)
-        print("  Page loaded.\n")
+        logger.info("FCC page loaded successfully.")
 
         for state in states:
             fips = STATE_FIPS[state]
@@ -112,7 +103,7 @@ def download_fcc_speeds(
                 # TODO: wait constants can be passed in the function or should they be static?
                 page.wait_for_timeout(1000)
             except PlaywrightTimeout:
-                print(f"  [ERROR] Timed out waiting for table after selecting {state}")
+                logger.error(f"Timeout while loading data for {state}. Skipping to next state.")
                 continue
 
             logger.info(f"  State '{state}' loaded, processing technologies...")
@@ -121,7 +112,7 @@ def download_fcc_speeds(
                 safe_tech = tech.replace(" ", "_")
 
                 if not overwrite and any(output_dir.glob(f"{safe}_{safe_tech}*")):
-                    print(f"  [{counter}/{total}] [SKIP] {state} / {tech} already exists")
+                    logger.info(f"  [{counter}/{total}] Skipping {state} / {tech} (already exists)")
                     continue
 
                 logger.info(f"  [{counter}/{total}] Downloading {state} / {tech}...")
@@ -145,9 +136,9 @@ def download_fcc_speeds(
                     saved.append(dest)
 
                 except PlaywrightTimeout:
-                    print(f"\n  [ERROR] Download timed out for {state} / {tech}")
+                    logger.error(f"    Timeout while trying to download {state} / {tech}. Skipping this technology.")
                 except Exception as e:
-                    print(f"\n  [ERROR] {state} / {tech}: {e}")
+                    logger.error(f"    Error while downloading {state} / {tech}: {e}")
 
             if state != states[-1]:
                 time.sleep(pause_seconds)
@@ -168,6 +159,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--states", type=str, nargs="+", default=["Alabama"],
         choices=STATE_FIPS.keys(),
+        metavar="STATE",
         help=f"States for download - one or more of of: {list(STATE_FIPS.keys())}"
         )
     
@@ -179,11 +171,13 @@ if __name__ == "__main__":
     parser.add_argument(
         "--technologies", type=str, nargs="+", default=["Fiber to the Premises"],
         choices=FIXED_TECHNOLOGIES_FOR_DOWNLOAD,
+        metavar="TECH",
+        help=f"Technologies for download - one or more of: {FIXED_TECHNOLOGIES_FOR_DOWNLOAD}"
         )
     
     parser.add_argument(
-        "--output-dir", type=Path, default=r"data\raw\fcc\speeds",
-        help="Data directory to dump .zip files into. Defaults to 'data/raw/fcc/speeds"
+        "--output-dir", type=Path, default=RAW_DIR_FCC_SPEEDS,
+        help="Data directory to dump .zip files into. Defaults to 'data/raw/fcc/speeds'"
     )
 
     # Set headless=False to watch the browser — useful for debugging
@@ -193,16 +187,6 @@ if __name__ == "__main__":
 
     # Default states should be Alabama or whatever the user enters
     # However, value should be over-written if the user mentions all
-    if args.all:
-        args.states = list(STATE_FIPS.keys())
-    
-    for state in args.states:
-        if state not in STATE_FIPS:
-            raise SystemExit(f"Invalid state: {state}. Must be one of: {list(STATE_FIPS.keys())}")
-        
-    for tech in args.technologies:
-        if tech not in FIXED_TECHNOLOGIES_FOR_DOWNLOAD:
-            raise SystemExit(f"Invalid technology: {tech}. Must be one of: {FIXED_TECHNOLOGIES_FOR_DOWNLOAD}")
     
     download_fcc_speeds(
         states=args.states,
