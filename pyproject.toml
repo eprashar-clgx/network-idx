@@ -24,7 +24,9 @@ dependencies = [
     "certifi (>=2026.2.25,<2027.0.0)",
     "truststore (>=0.10.4,<0.11.0)",
     "playwright (>=1.58.0,<2.0.0)",
-    "pytest (>=9.0.2,<10.0.0)"
+    "pytest (>=9.0.2,<10.0.0)",
+    "google-cloud-storage (>=3.10.0,<4.0.0)",
+    "python-dotenv (>=1.2.2,<2.0.0)"
 ]
 
 

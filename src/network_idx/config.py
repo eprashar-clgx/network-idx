@@ -2,7 +2,10 @@
 Configuration for network_idx package that will potentially be environment-specific. 
 For example, file paths, API keys, or other settings that may differ within dev (local/remote) or across staging/production environments.
 """
+import os
 from pathlib import Path
+from dotenv import load_dotenv
+load_dotenv()  # Load environment variables from .env file
 
 # ── File Paths ────────────────────────────────────────────────────────────────
 RAW_DIR = Path("data/raw")
@@ -16,5 +19,22 @@ EXTRACTED_DIR_FCC_SPEEDS = Path("data/extracted/fcc/speeds")
 PROCESSED_DIR = Path("data/processed")
 PROCESSED_DIR_FCC = Path("data/processed/fcc")
 PROCESSED_DIR_FCC_SPEEDS = Path("data/processed/fcc/speeds")
+
+# GCS Settings
+GCS_BUCKET_NAME = os.getenv("GCS_BUCKET_NAME")
+GCS_PROJECT_ID = os.getenv("GCS_PROJECT_ID")
+
+# JSON path varies per user per environment
+GCS_ADC_JSON_PATH_EP_LOCAL = Path(os.getenv("GCS_ADC_JSON_PATH_EP_LOCAL", ""))
+
+# GCS Storage settings
+GCS_PREFIX_RAW_FCC_SPEEDS = "network_idx/raw/fcc/speeds"
+GCS_PREFIX_EXTRACTED_FCC_SPEEDS = "network_idx/raw/fcc/speeds"
+GCS_PREFIX_PROCESSED_FCC_SPEEDS = "network_idx/raw/fcc/speeds"
+
+# GCS Upload settings
+UPLOAD_OVERWRITE = False # if False, skip blobs that already exist
+UPLOAD_CHUNK_MB = 8 # chunk size for multipart uploads (in MB)
+
 
 
