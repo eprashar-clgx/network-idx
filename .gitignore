@@ -6,6 +6,7 @@ __pycache__/
 *$py.class
 .pytest_cache/
 .env
+/data
 
 # Jupyter Notebooks
 .ipynb_checkpoints/
