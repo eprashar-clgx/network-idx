@@ -1,5 +1,5 @@
 """
-GCS Upload of FCC Fixed Speeds Data (Parquet files).
+GCS Upload of FCC Fixed Speeds Data (raw, extracted csv and processed parquet files).
 ==============================================================
 Uploads processed parquet files to GCS under:
     gs://{GCS_BUCKET_NAME}/processed/fcc/speeds/fcc_fixed_speeds_{STATE_USPS}_{STATE_FIPS}.parquet
