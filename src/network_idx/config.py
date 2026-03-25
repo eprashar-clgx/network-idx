@@ -11,10 +11,13 @@ load_dotenv()  # Load environment variables from .env file
 RAW_DIR = Path("data/raw")
 RAW_DIR_FCC = Path("data/raw/fcc")
 RAW_DIR_FCC_SPEEDS = Path("data/raw/fcc/speeds")
+RAW_DIR_FCC_BROADBAND_COVERAGE = Path("data/raw/fcc/broadband_coverage")
+
 
 EXTRACTED_DIR = Path("data/extracted")
 EXTRACTED_DIR_FCC = Path("data/extracted/fcc")
 EXTRACTED_DIR_FCC_SPEEDS = Path("data/extracted/fcc/speeds")
+EXTRACTED_DIR_FCC_BROADBAND_COVERAGE = Path("data/extracted/fcc/broadband_coverage")
 
 PROCESSED_DIR = Path("data/processed")
 PROCESSED_DIR_FCC = Path("data/processed/fcc")
