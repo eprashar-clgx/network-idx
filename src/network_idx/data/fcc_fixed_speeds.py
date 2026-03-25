@@ -8,8 +8,6 @@ Usage:
 """
 import argparse
 import logging
-#import sys
-#import os
 import time
 from pathlib import Path
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
@@ -82,6 +80,7 @@ def download_fcc_speeds(
         logger.info("FCC page loaded successfully.")
 
         for state in states:
+
             fips = STATE_FIPS[state]
             safe = state.replace(" ", "_")
 
@@ -110,8 +109,9 @@ def download_fcc_speeds(
             for tech in technologies:
                 counter += 1
                 safe_tech = tech.replace(" ", "_")
+                file_tech = tech.replace(" ", "")
 
-                if not overwrite and any(output_dir.glob(f"{safe}_{safe_tech}*")):
+                if not overwrite and any(output_dir.glob(f"*_{fips}_{file_tech}*")):
                     logger.info(f"  [{counter}/{total}] Skipping {state} / {tech} (already exists)")
                     continue
 
@@ -128,7 +128,7 @@ def download_fcc_speeds(
 
                     download = dl_info.value
                     suggested = download.suggested_filename
-                    dest = output_dir / (suggested if suggested else f"{safe}_{safe_tech}_{fips}.zip")
+                    dest = output_dir / (suggested if suggested else f"{safe}_{file_tech}_{fips}.zip")
 
                     download.save_as(dest)
                     size_mb = dest.stat().st_size / (1024 * 1024)
@@ -185,12 +185,14 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    # Default states should be Alabama or whatever the user enters
-    # However, value should be over-written if the user mentions all
+    valid_states = list(STATE_FIPS.keys())
+    valid_technologies = FIXED_TECHNOLOGIES_FOR_DOWNLOAD
+    states_to_process = valid_states if args.all else args.states
+    technologies_to_process = valid_technologies if args.all else args.technologies
     
     download_fcc_speeds(
-        states=args.states,
-        technologies=args.technologies,
+        states=states_to_process,
+        technologies=technologies_to_process,
         output_dir=args.output_dir,
         headless=HEADLESS,
     )
