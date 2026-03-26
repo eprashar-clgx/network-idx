@@ -181,7 +181,7 @@ if __name__ == "__main__":
     )
 
     # Set headless=False to watch the browser — useful for debugging
-    HEADLESS = False
+    HEADLESS = True
 
     args = parser.parse_args()
 
