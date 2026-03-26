@@ -69,9 +69,24 @@ def download_fcc_speeds(
 
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=headless, channel="chrome")
-        context = browser.new_context(accept_downloads=True)
-        page    = context.new_page()
+        browser = p.chromium.launch(
+        headless=False, 
+        channel="chrome",
+        args=[
+            "--disable-http2", 
+            "--disable-blink-features=AutomationControlled"  # Hides the "I am a bot" flag
+        ]
+        )
+        
+        context = browser.new_context(
+        accept_downloads=True,
+        # Fake a normal Windows machine
+        user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+        # Give the virtual monitor a standard desktop resolution so the table isn't squished
+        viewport={"width": 1920, "height": 1080}
+        )
+
+        page = context.new_page()
 
         logger.info("  Loading FCC page...")
         page.goto(FCC_URL, wait_until="domcontentloaded", timeout=60_000)
