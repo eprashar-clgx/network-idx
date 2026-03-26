@@ -7,6 +7,9 @@ from pathlib import Path
 from dotenv import load_dotenv
 load_dotenv()  # Load environment variables from .env file
 
+# Environment
+NETWORK_IDX_ENV = os.getenv("NETWORK_IDX_ENV", "local")  
+
 # ── File Paths ────────────────────────────────────────────────────────────────
 RAW_DIR = Path("data/raw")
 RAW_DIR_FCC = Path("data/raw/fcc")
@@ -32,8 +35,8 @@ GCS_ADC_JSON_PATH_EP_LOCAL = Path(os.getenv("GCS_ADC_JSON_PATH_EP_LOCAL", ""))
 
 # GCS Storage settings
 GCS_PREFIX_RAW_FCC_SPEEDS = "network_idx/raw/fcc/speeds"
-GCS_PREFIX_EXTRACTED_FCC_SPEEDS = "network_idx/raw/fcc/speeds"
-GCS_PREFIX_PROCESSED_FCC_SPEEDS = "network_idx/raw/fcc/speeds"
+GCS_PREFIX_EXTRACTED_FCC_SPEEDS = "network_idx/extracted/fcc/speeds"
+GCS_PREFIX_PROCESSED_FCC_SPEEDS = "network_idx/processed/fcc/speeds"
 
 # GCS Upload settings
 UPLOAD_OVERWRITE = False # if False, skip blobs that already exist

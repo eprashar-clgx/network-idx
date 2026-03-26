@@ -1,22 +1,24 @@
 """
 GCS Upload of FCC Fixed Speeds Data (raw, extracted csv and processed parquet files).
 ==============================================================
-Uploads processed parquet files to GCS under:
-    gs://{GCS_BUCKET_NAME}/processed/fcc/speeds/fcc_fixed_speeds_{STATE_USPS}_{STATE_FIPS}.parquet
+Uploads:
+    * raw zip files to GCS under:       gs://{BUCKET}/network_idx/raw/fcc/speeds/
+    * extracted csv files to GCS under:  gs://{BUCKET}/network_idx/extracted/fcc/speeds/
+    * processed parquet files to GCS under: gs://{BUCKET}/network_idx/processed/fcc/speeds/
 
 Authentication:
-Uses Google's ADC. Run `gcloud auth application-default login` to set up credentials locally.
-Make sure the JSON path in .env, config.py and this file point to the correct location of your ADC JSON file.
+    - Local (NETWORK_IDX_ENV=local): uses check_and_authenticate with ADC JSON file.
+    - VM    (NETWORK_IDX_ENV=vm):    uses Google ADC from the metadata service automatically.
 
 Usage:
-    # Upload all states
-    python -m src.network_idx.transfer.fcc_fixed_speeds_gcs --all
+    # Upload processed parquets for all states
+    python -m network_idx.transfer.fcc_fixed_speeds_gcs --stage processed --all
 
-    # Upload selected states
-    python -m src.network_idx.transfer.fcc_fixed_speeds_gcs --states AK AL IL IN
+    # Upload raw zips for selected states
+    python -m network_idx.transfer.fcc_fixed_speeds_gcs --stage raw --states AK AL IL IN
 
     # Force re-upload
-    python -m src.network_idx.transfer.fcc_fixed_speeds_gcs --states AK AL IL IN --overwrite 
+    python -m network_idx.transfer.fcc_fixed_speeds_gcs --stage extracted --states AK --overwrite
 """
 
 import argparse
@@ -26,13 +28,19 @@ from google.cloud import storage
 import logging
 
 from network_idx.config import (
+    NETWORK_IDX_ENV,
+    RAW_DIR_FCC_SPEEDS,
+    EXTRACTED_DIR_FCC_SPEEDS,
     PROCESSED_DIR_FCC_SPEEDS,
     GCS_BUCKET_NAME, 
-    GCS_PROJECT_ID, 
+    GCS_PROJECT_ID,
     GCS_ADC_JSON_PATH_EP_LOCAL,
-    GCS_PREFIX_PROCESSED_FCC_SPEEDS, 
-    UPLOAD_OVERWRITE, 
-    UPLOAD_CHUNK_MB)
+    GCS_PREFIX_RAW_FCC_SPEEDS,
+    GCS_PREFIX_EXTRACTED_FCC_SPEEDS,
+    GCS_PREFIX_PROCESSED_FCC_SPEEDS,
+    UPLOAD_OVERWRITE,
+    UPLOAD_CHUNK_MB
+    )
 from network_idx.constants import STATE_USPS_TO_FIPS
 from network_idx.utils import check_and_authenticate
 
@@ -40,11 +48,22 @@ from network_idx.utils import check_and_authenticate
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+# Each stage maps to: (local_dir, glob_pattern, gcs_prefix)
+STAGE_CONFIG = {
+    "raw": (RAW_DIR_FCC_SPEEDS, "bdc_*.zip", GCS_PREFIX_RAW_FCC_SPEEDS),
+    "extracted": (EXTRACTED_DIR_FCC_SPEEDS, "**/*.csv", GCS_PREFIX_EXTRACTED_FCC_SPEEDS),
+    "processed": (PROCESSED_DIR_FCC_SPEEDS, "fcc_fixed_speeds_*.parquet", GCS_PREFIX_PROCESSED_FCC_SPEEDS),
+}
+
+
 # GCS Helpers
 def get_gcs_client() -> storage.Client:
     '''
     Initializes and returns a GCS client using ADC credentials.
+    On local, runs check_and_authenticate first; on VM, ADC is automatic.
     '''
+    if NETWORK_IDX_ENV == "local":
+        check_and_authenticate(GCS_ADC_JSON_PATH_EP_LOCAL)
     return storage.Client(project=GCS_PROJECT_ID)
 
 def blob_exists(bucket: storage.Bucket, blob_name: str) -> bool:
@@ -74,115 +93,141 @@ def upload_file(
     logger.info(f"Upload complete: {local_path} ({size_mb:.2f} MB)")
     return True
 
-# Filename helper
-def parse_usps_fips_from_filename(filename: str) -> tuple[str, str] | None:
+# ── Filename parsers ─────────────────────────────────────────────────────────
+
+def parse_fips_from_raw_filename(filename: str) -> str | None:
     '''
-    Extracts state USPS and FIPS code from the filename.
+    Extracts the 2-digit FIPS code from a raw/extracted FCC filename.
+    Pattern: bdc_{FIPS}_{Technology}_fixed_broadband_...
+    '''
+    match = re.match(r"bdc_(\d{2})_", filename)
+    return match.group(1) if match else None
+
+def parse_usps_from_processed_filename(filename: str) -> str | None:
+    '''
+    Extracts state USPS code from a processed parquet filename.
     Pattern: fcc_fixed_speeds_{STATE_USPS}_{STATE_FIPS}.parquet
     '''
-    match = re.match(r"fcc_fixed_speeds_([A-Z]{2})_(\d{2})\.parquet", filename)
-    if match:
-        return match.group(1), match.group(2)
-    return None
+    match = re.match(r"fcc_fixed_speeds_([A-Z]{2})_\d{2}\.parquet", filename)
+    return match.group(1) if match else None
 
 # Main upload function
-def upload_fcc_parquets(
+def upload_fcc_files(
+        stage: str,
         states: list[str] | None=None,
-        processed_dir: Path=PROCESSED_DIR_FCC_SPEEDS,
+        source_dir: Path | None=None,
         bucket_name: str=GCS_BUCKET_NAME,
-        gcs_prefix: str=GCS_PREFIX_PROCESSED_FCC_SPEEDS,
         overwrite: bool=UPLOAD_OVERWRITE,
         chunk_mb: int=UPLOAD_CHUNK_MB
         ) -> list[str]:
     '''
-    Uploads FCC fixed speeds parquet files to GCS.
+    Uploads FCC fixed speeds files to GCS for the given stage.
     Args:
-        states: List of state USPS codes to upload. If None, uploads all states.
-        processed_dir: Directory containing processed parquet files.
+        stage:      One of "raw", "extracted", "processed".
+        states:     List of state USPS codes to upload. If None, uploads all.
+        source_dir: Override the default local directory for this stage.
         bucket_name: GCS bucket name.
-        gcs_prefix: GCS prefix for uploaded files.
-        overwrite: Whether to overwrite existing files in GCS.
-        chunk_mb: Chunk size in MB for uploads.
+        overwrite:  Whether to overwrite existing blobs.
+        chunk_mb:   Chunk size in MB for uploads.
     Returns:
         List of GCS blob names that were uploaded.
     '''
-    # Authenticate and initialize GCS client
-    # NOTE: JSON path must be set according to the user and environment in config.py and then referenced here
-    check_and_authenticate(GCS_ADC_JSON_PATH_EP_LOCAL)
+    default_dir, glob_pattern, gcs_prefix = STAGE_CONFIG[stage]
+    local_dir = source_dir or default_dir
 
-    # Find parquet files
-    all_parquet_files = sorted(processed_dir.glob("fcc_fixed_speeds_*.parquet"))
-    if not all_parquet_files:
-        logger.error(f"No parquet files found in {processed_dir}. Exiting.")
-        return []
-    
-    # Filter to requested states if specified
+    # Build FIPS filter set from requested USPS codes
+    fips_filter = None
+    usps_filter = None
     if states:
         states_upper = [s.upper() for s in states]
-        parquets = [
-            p for p in all_parquet_files if (parsed := parse_usps_fips_from_filename(p.name)) and parsed[0] in states_upper
-        ]
-        if not parquets:
-            logger.error(f"No parquet files found for specified states: {states_upper}. Exiting.")
-            return []
+        if stage in ("raw", "extracted"):
+            fips_filter = {STATE_USPS_TO_FIPS[usps] for usps in states_upper if usps in STATE_USPS_TO_FIPS}
+        else:
+            usps_filter = set(states_upper)
+    
+    # Find local files
+    all_files = sorted(local_dir.glob(glob_pattern))
+    if not all_files:
+        logger.error(f"No {stage} files matching '{glob_pattern}' found in {local_dir}. Exiting.")
+        return []
+
+     # Filter to requested states
+    if fips_filter is not None:
+        files = [f for f in all_files if (fips := parse_fips_from_raw_filename(f.name)) and fips in fips_filter]
+    elif usps_filter is not None:
+        files = [f for f in all_files if (usps := parse_usps_from_processed_filename(f.name)) and usps in usps_filter]
     else:
-        parquets = all_parquet_files
-        
-    logger.info(f"Found {len(parquets)} parquet files to upload.")
-    logger.info(f"Source directory: {processed_dir.resolve()}")
+        files = all_files
+
+    if not files:
+        logger.error(f"No {stage} files found for specified states. Exiting.")
+        return []
+    
+    logger.info(f"Stage: {stage}")
+    logger.info(f"Source directory: {local_dir.resolve()}")
     logger.info(f"GCS Bucket: {bucket_name}, Prefix: {gcs_prefix}")
-    logger.info(f"Files: {len(parquets)}")
+    logger.info(f"Files to upload: {len(files)}")
     logger.info(f"Overwrite existing: {overwrite}")
 
     client = get_gcs_client()
     bucket = client.bucket(bucket_name)
     uploaded_blobs = []
 
-    for parquet in parquets:
-        blob_name = f"{gcs_prefix}/{parquet.name}"
+    for file in files:
+        blob_name = f"{gcs_prefix}/{file.name}"
         success = upload_file(
-            local_path=parquet,
+            local_path=file,
             bucket=bucket,
             blob_name=blob_name,
             overwrite=overwrite,
-            chunk_mb=chunk_mb
+            chunk_mb=chunk_mb,
         )
         if success:
             uploaded_blobs.append(blob_name)
-    logger.info(f"Upload process complete. Total files uploaded: {len(uploaded_blobs)}")
+
+    logger.info(f"Upload complete. {len(uploaded_blobs)}/{len(files)} files uploaded.")
     return uploaded_blobs
 
 # ── CLI entry point
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Upload FCC Fixed Speeds parquet files to Google Cloud Storage."
+        description="Upload FCC Fixed Speeds files to Google Cloud Storage."
+    )
+    parser.add_argument(
+        "--stage", type=str, required=True,
+        choices=STAGE_CONFIG.keys(),
+        help="Which file stage to upload: raw (zips), extracted (csvs), or processed (parquets)."
     )
     parser.add_argument(
         "--states", type=str, nargs="+", default=None,
         choices=STATE_USPS_TO_FIPS.keys(),
         metavar="STATE",
-        help=f"States to upload - one or more of: {list(STATE_USPS_TO_FIPS.keys())}. If not specified, uploads all states."
-        )
+        help=f"States to upload (USPS codes). If not specified, uploads all."
+    )
     parser.add_argument(
         "--all", action="store_true", default=False,
-        help="Upload data for all states (overrides --states)"
-        )
+        help="Upload data for all states (overrides --states)."
+    )
     parser.add_argument(
         "--overwrite", action="store_true", default=False,
-        help="Whether to overwrite existing files in GCS. Defaults to False."
+        help="Overwrite existing files in GCS. Defaults to False."
     )
     parser.add_argument(
-        "--processed-dir", type=Path, default=PROCESSED_DIR_FCC_SPEEDS,
-        help="Directory containing processed parquet files. Defaults to 'data/processed/fcc/speeds'"
+        "--source-dir", type=Path, default=None,
+        help="Override the default source directory for the chosen stage."
     )
     args = parser.parse_args()
+
     valid = list(STATE_USPS_TO_FIPS.keys())
     bad = [s for s in (args.states or []) if s not in valid]
     if bad:
-        logger.error(f"Invalid state USPS codes: {bad}. Must be one or more of: {list(valid)}")
+        parser.error(f"Invalid state USPS codes: {bad}. Must be one or more of: {valid}")
+
     states_to_upload = valid if args.all else args.states
-    upload_fcc_parquets(
+
+    upload_fcc_files(
+        stage=args.stage,
         states=states_to_upload,
-        processed_dir=args.processed_dir,
-        overwrite=args.overwrite
+        source_dir=args.source_dir,
+        overwrite=args.overwrite,
     )
