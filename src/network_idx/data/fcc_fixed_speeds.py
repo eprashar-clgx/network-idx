@@ -70,7 +70,7 @@ def download_fcc_speeds(
 
     with sync_playwright() as p:
         browser = p.chromium.launch(
-        headless=False, 
+        headless=headless, 
         channel="chrome",
         args=[
             "--disable-http2", 
@@ -121,6 +121,8 @@ def download_fcc_speeds(
                 continue
 
             logger.info(f"  State '{state}' loaded, processing technologies...")
+
+            # Loop through technologies and attempt downloads
             for tech in technologies:
                 counter += 1
                 safe_tech = tech.replace(" ", "_")
@@ -132,28 +134,46 @@ def download_fcc_speeds(
 
                 logger.info(f"  [{counter}/{total}] Downloading {state} / {tech}...")
 
-                try:
-                    row_button = page.locator(
-                        f"//tr[td[normalize-space()='{tech}']]//button"
-                    )
-                    row_button.wait_for(state="visible", timeout=10_000)
+                # Adding retry logic in case request times out (it will)
+                max_retries = 3
+                for attempt in range(max_retries):
+                    try:
+                        row_button = page.locator(
+                            f"//tr[td[normalize-space()='{tech}']]//button"
+                            )
+                        row_button.wait_for(state="visible", timeout=10_000)
+                        
+                        # Allow 5 minutes for download
+                        with page.expect_download(timeout=300_000) as dl_info:
+                            row_button.click()
+                        
+                        download = dl_info.value
+                        suggested = download.suggested_filename
+                        dest = output_dir / (suggested if suggested else f"{safe}_{file_tech}_{fips}.zip")
+                        logger.info(f"    [Attempt {attempt + 1}/{max_retries}] Streaming data... waiting for file to save.")
+                        
+                        # Block until the download is complete and saved to disk
+                        download.save_as(dest)
+                        size_mb = dest.stat().st_size / (1024 * 1024)
+                        logger.info(f"    Downloaded '{dest.name}' ({size_mb:.2f} MB)")
+                        saved.append(dest)
 
-                    with page.expect_download(timeout=300_000) as dl_info:
-                        row_button.click()
+                        # Break out of the retry loop if the file is saved.
+                        # If not, check retry count and try again 
+                        break
 
-                    download = dl_info.value
-                    suggested = download.suggested_filename
-                    dest = output_dir / (suggested if suggested else f"{safe}_{file_tech}_{fips}.zip")
-
-                    download.save_as(dest)
-                    size_mb = dest.stat().st_size / (1024 * 1024)
-                    logger.info(f"    Downloaded '{dest.name}' ({size_mb:.2f} MB)")
-                    saved.append(dest)
-
-                except PlaywrightTimeout:
-                    logger.error(f"    Timeout while trying to download {state} / {tech}. Skipping this technology.")
-                except Exception as e:
-                    logger.error(f"    Error while downloading {state} / {tech}: {e}")
+                    except PlaywrightTimeout:
+                        if attempt < max_retries - 1:
+                            logger.warning(f"    [Attempt {attempt + 1}/{max_retries}] Timeout from FCC. Waiting 10 seconds before retrying...")
+                            time.sleep(10) # Retry after 10 seconds
+                        else:
+                            logger.error(f"    Failed to download {state} / {tech} after {max_retries} attempts. Moving on.")
+                    except Exception as e:
+                        if attempt < max_retries - 1:
+                            logger.warning(f"    [Attempt {attempt + 1}/{max_retries}] Connection error: {e}. Retrying in 10 seconds...")
+                            time.sleep(10)
+                        else:
+                            logger.error(f"    Fatal error downloading {state} / {tech}: {e}")
 
             if state != states[-1]:
                 time.sleep(pause_seconds)
