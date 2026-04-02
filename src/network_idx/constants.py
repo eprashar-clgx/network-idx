@@ -154,6 +154,42 @@ FCC_FIXED_SPEED_INPUTS = [
     "max_advertised_upload_speed"
 ]
 
+# FCC Fixed Coverage (Summary) columns
+FCC_FIXED_COVERAGE_TECHNOLOGIES = ["Copper", "Cable", "Fiber"]
+
+FCC_FIXED_COVERAGE_INPUTS = [
+    "area_data_type",
+    "geography_type",
+    "geography_id",
+    "geography_desc",
+    "geography_desc_full",
+    "total_units",
+    "biz_res",
+    "technology",
+    "speed_02_02",
+    "speed_10_1",
+    "speed_25_3",
+    "speed_100_20",
+    "speed_250_25",
+    "speed_1000_100",
+]
+
+FCC_FIXED_COVERAGE_OUTPUTS = [
+    "geography_id",
+    "geography_desc",
+    "geography_desc_full",
+    "total_units",
+    "copper_speed_100_20",
+    "copper_less_than_100_20",
+    "copper_more_than_100_20",
+    "cable_speed_100_20",
+    "cable_less_than_100_20",
+    "cable_more_than_100_20",
+    "fiber_speed_100_20",
+    "fiber_less_than_100_20",
+    "fiber_more_than_100_20",
+]
+
 FCC_FIXED_SPEED_OUTPUTS= [
     "block_geoid",
     "state_usps",

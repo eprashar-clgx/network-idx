@@ -25,6 +25,7 @@ EXTRACTED_DIR_FCC_BROADBAND_COVERAGE = Path("data/extracted/fcc/broadband_covera
 PROCESSED_DIR = Path("data/processed")
 PROCESSED_DIR_FCC = Path("data/processed/fcc")
 PROCESSED_DIR_FCC_SPEEDS = Path("data/processed/fcc/speeds")
+PROCESSED_DIR_FCC_BROADBAND_COVERAGE = Path("data/processed/fcc/broadband_coverage")
 
 # GCS Settings
 GCS_BUCKET_NAME = os.getenv("GCS_BUCKET_NAME")
