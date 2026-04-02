@@ -154,6 +154,52 @@ FCC_FIXED_SPEED_INPUTS = [
     "max_advertised_upload_speed"
 ]
 
+FCC_FIXED_SPEED_OUTPUTS= [
+    "block_geoid",
+    "state_usps",
+    "state_fips",
+    "cable_location_count",
+    "cable_provider_count",
+    "cable_max_download_speed",
+    "cable_max_upload_speed",
+    "copper_location_count",
+    "copper_provider_count",
+    "copper_max_download_speed",
+    "copper_max_upload_speed",
+    "fiber_location_count",
+    "fiber_provider_count",
+    "fiber_max_download_speed",
+    "fiber_max_upload_speed"
+]
+
+FCC_FIXED_SPEEDS_PROVIDER_INPUTS = [
+    "block_geoid",
+    "frn",
+    "provider_id",
+    "brand_name",
+    "location_id",
+    "technology",
+    "max_advertised_download_speed",
+    "max_advertised_upload_speed"
+    ]
+
+FCC_FIXED_SPEEDS_PROVIDER_OUTPUTS = [
+    "state_usps",
+    "block_geoid",
+    "frn",
+    "provider_id",
+    "brand_name",
+    "cable_location_count",
+    "cable_max_download_speed",
+    "cable_max_upload_speed",
+    "copper_location_count",
+    "copper_max_download_speed",
+    "copper_max_upload_speed",
+    "fiber_location_count",
+    "fiber_max_download_speed",
+    "fiber_max_upload_speed"
+    ]
+
 # FCC Fixed Coverage (Summary) columns
 FCC_FIXED_COVERAGE_TECHNOLOGIES = ["Copper", "Cable", "Fiber"]
 
@@ -190,20 +236,3 @@ FCC_FIXED_COVERAGE_OUTPUTS = [
     "fiber_more_than_100_20",
 ]
 
-FCC_FIXED_SPEED_OUTPUTS= [
-    "block_geoid",
-    "state_usps",
-    "state_fips",
-    "cable_location_count",
-    "cable_provider_count",
-    "cable_max_download_speed",
-    "cable_max_upload_speed",
-    "copper_location_count",
-    "copper_provider_count",
-    "copper_max_download_speed",
-    "copper_max_upload_speed",
-    "fiber_location_count",
-    "fiber_provider_count",
-    "fiber_max_download_speed",
-    "fiber_max_upload_speed"
-]
