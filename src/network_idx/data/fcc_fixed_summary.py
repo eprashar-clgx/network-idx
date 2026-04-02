@@ -11,9 +11,11 @@ import logging
 import time
 from pathlib import Path
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
-from network_idx.constants import (FCC_URL,
-                                   STATE_FIPS)
-from network_idx.config import RAW_DIR_FCC_SPEEDS
+from network_idx.constants import (
+    FCC_URL,
+    STATE_FIPS
+    )
+from network_idx.config import RAW_DIR_FCC_BROADBAND_COVERAGE
 
 # Adding logging for better visibility into the process
 logging.basicConfig(
@@ -22,7 +24,7 @@ logging.basicConfig(
     )
 logger = logging.getLogger(__name__)
 
-def download_fcc_broadband_summary(
+def download_fcc_fixed_summary(
     states: list[str],
     output_dir: Path,
     overwrite: bool = False,
@@ -34,8 +36,7 @@ def download_fcc_broadband_summary(
 
     Parameters
     ----------
-    states        : State/territory names. Defaults to Alabama.
-    technologies  : Technology names ["Cable", "Copper", "Fiber to the Premises"]. Defaults to Fiber                    
+    states        : State/territory names. Defaults to Alabama.                    
     output_dir    : Folder to save downloaded .zip files into.
     overwrite     : If False, skip combinations already saved to disk.
     headless      : If False, opens a visible browser window (useful for debugging).
@@ -58,74 +59,107 @@ def download_fcc_broadband_summary(
     logger.info(f"  States / Total Files      : {len(states)}")
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=headless, channel="chrome")
-        context = browser.new_context(accept_downloads=True)
+        # args specifically added to run it on the VM without getting blocked by the server.
+        browser = p.chromium.launch(
+            headless=headless, 
+            channel="chrome",
+            args=[
+                "--disable-http2", 
+                "--disable-blink-features=AutomationControlled"
+                ]
+                )
+        # user_agent specifically added to run it on the VM without getting blocked by the server.
+        context = browser.new_context(
+            accept_downloads=True,
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+            viewport={"width": 1920, "height": 1080}
+            )
         page = context.new_page()
 
         logger.info("  Loading FCC page...")
         page.goto(FCC_URL, wait_until="domcontentloaded", timeout=60_000)
+        
         # Wait for the dropdown to be present
-        page.wait_for_selector("select#state", timeout=15_000)
+        page.wait_for_selector("select#fixedCensusPlaceState", timeout=15_000)
         logger.info("FCC page loaded successfully.")
+
+        # Scrape state - ID mapping from the live dropdown
+        # Instead of hardcoding mapping from constants.py
+        # Beautiful and elegant solution! 
+        options = page.query_selector_all("select#fixedCensusPlaceState option[value]:not([value=''])")
+        census_place_ids = {}
+        for opt in options:
+            val = opt.get_attribute("value")
+            text = opt.inner_text().strip()
+            if val and text:
+                census_place_ids[text] = val
+        logger.info(f"  Scraped {len(census_place_ids)} state IDs from dropdown")
 
         for state in states:
             fips = STATE_FIPS[state]
+            # No need to import any mapping that changes
+            census_place_id = census_place_ids[state]
             safe = state.replace(" ", "_")
-
+            
+            # Guard: ensure the state was found in the live dropdown
+            if state not in census_place_ids:
+                logger.error(f"  State '{state}' not found in dropdown. Skipping.")
+                continue
+            census_place_id = census_place_ids[state]
+            
             logger.info(f"Processing state: {state} (FIPS: {fips})")
+
+            # Check if "a" file exists for this state
+            # Note that in case we want to download a newer version without over-writing older versions
+            # We should add a timestamp in the glob pattern too
+            if not overwrite and any(output_dir.glob(f"bdc_{fips}_fixed_broadband_summary*")):
+                logger.info(f"  [{counter}/{total}] Skipping {state} (already exists)")
+                continue
 
             try:
                 # Select the state
-                page.select_option("select#state", value=fips)
+                page.select_option("select#fixedCensusPlaceState", value=census_place_id)
                 # Force Angular change detection
                 page.eval_on_selector(
-                    "select#state",
+                    "select#fixedCensusPlaceState",
                     "el => el.dispatchEvent(new Event('change', { bubbles: true }))"
-                )
+                    )
                 # Wait for the table rows to appear
+                # TODO: check if we still need this
                 page.wait_for_selector(
                     "tr td.align-middle",
                     timeout=15_000,
                 )
-                # TODO: wait constants can be passed in the function or should they be static?
                 page.wait_for_timeout(1000)
             except PlaywrightTimeout:
                 logger.error(f"Timeout while loading data for {state}. Skipping to next state.")
                 continue
 
-            logger.info(f"  State '{state}' loaded, processing technologies...")
-            for tech in technologies:
-                counter += 1
-                safe_tech = tech.replace(" ", "_")
+            logger.info(f"[{counter}/{total}] Downloading {state}...")
 
-                if not overwrite and any(output_dir.glob(f"{safe}_{safe_tech}*")):
-                    logger.info(f"  [{counter}/{total}] Skipping {state} / {tech} (already exists)")
-                    continue
-
-                logger.info(f"  [{counter}/{total}] Downloading {state} / {tech}...")
-
-                try:
-                    row_button = page.locator(
-                        f"//tr[td[normalize-space()='{tech}']]//button"
+            try:
+                row_button = page.locator(
+                    "button:not([disabled]):has(span.sr-only:text('Download zipped Census Place file'))"
                     )
-                    row_button.wait_for(state="visible", timeout=10_000)
+                row_button.wait_for(state="visible", timeout=10_000)
 
-                    with page.expect_download(timeout=300_000) as dl_info:
-                        row_button.click()
+                with page.expect_download(timeout=300_000) as dl_info:
+                    row_button.click()
 
-                    download = dl_info.value
-                    suggested = download.suggested_filename
-                    dest = output_dir / (suggested if suggested else f"{safe}_{safe_tech}_{fips}.zip")
+                download = dl_info.value
+                suggested = download.suggested_filename
+                dest = output_dir / (suggested if suggested else f"{safe}__{fips}_broadband_fixed_summary.zip")
 
-                    download.save_as(dest)
-                    size_mb = dest.stat().st_size / (1024 * 1024)
-                    logger.info(f"    Downloaded '{dest.name}' ({size_mb:.2f} MB)")
-                    saved.append(dest)
+                download.save_as(dest)
+                size_mb = dest.stat().st_size / (1024 * 1024)
+                logger.info(f"    Downloaded '{dest.name}' ({size_mb:.2f} MB)")
+                saved.append(dest)
+                counter += 1
 
-                except PlaywrightTimeout:
-                    logger.error(f"    Timeout while trying to download {state} / {tech}. Skipping this technology.")
-                except Exception as e:
-                    logger.error(f"    Error while downloading {state} / {tech}: {e}")
+            except PlaywrightTimeout:
+                logger.error(f"    Timeout while trying to download {state}. Skipping this technology.")
+            except Exception as e:
+                logger.error(f"    Error while downloading {state} {e}")
 
             if state != states[-1]:
                 time.sleep(pause_seconds)
@@ -134,3 +168,40 @@ def download_fcc_broadband_summary(
 
     logger.info(f"\nDownload complete. {len(saved)}/{total} files saved to '{output_dir}'.")
     return saved
+
+# ── CLI entry point ──────────────────────────────────────────────────────────
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="Download FCC Fixed Broadband Summary (Census Place) files using a headless browser."
+    )
+
+    parser.add_argument(
+        "--states", type=str, nargs="+", default=["Alabama"],
+        choices=STATE_FIPS.keys(),
+        metavar="STATE",
+        help=f"States for download - one or more of: {list(STATE_FIPS.keys())}"
+    )
+
+    parser.add_argument(
+        "--all", action="store_true", default=False,
+        help="Download data for all states (overrides --states)"
+    )
+
+    parser.add_argument(
+        "--output-dir", type=Path, default=RAW_DIR_FCC_BROADBAND_COVERAGE,
+        help="Data directory to dump .zip files into. Defaults to 'data/raw/fcc/broadband_coverage'"
+    )
+
+    # Set headless=False to watch the browser — useful for debugging
+    HEADLESS = True
+
+    args = parser.parse_args()
+
+    states_to_process = list(STATE_FIPS.keys()) if args.all else args.states
+
+    download_fcc_fixed_summary(
+        states=states_to_process,
+        output_dir=args.output_dir,
+        headless=HEADLESS,
+    )
