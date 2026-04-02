@@ -1,13 +1,10 @@
 """
 Pipeline per state:
 1. 3 zip files already exist
-2. Unzip each file to extract csv
-3. Save csv to a new folder with a consistent naming convention
-4. Load csv as a dataframe, aggregate to block_geoid and create features that are defined upfront
-5. Do this for all technology types (copper, cable, fiber) and merge into one dataframe per state
-6. Save as one parquet file per state  
+2. Unzip each file to extract csvs
+--- Finish wriiting this docstring ---
 
-Output Schema (one row per block_geoid, 12 feature columns):
+Output Schema for Block (one row per block_geoid, 12 feature columns):
 - block_geoid
 - state_usps
 - state_fips
@@ -16,6 +13,8 @@ Output Schema (one row per block_geoid, 12 feature columns):
 - {tech}_max_download_speed
 - {tech}_max_upload_speed
 ...repeated for cable/copper/fiber
+
+Output Schema for Provider-Block (one row per provider-block combination, more granular):
 
 Usage:
 
@@ -31,7 +30,9 @@ from network_idx.constants import (
     STATE_USPS_TO_FIPS,
     FIXED_TECHNOLOGIES_MAPPING,
     FCC_FIXED_SPEED_INPUTS,
-    FCC_FIXED_SPEED_OUTPUTS
+    FCC_FIXED_SPEED_OUTPUTS,
+    FCC_FIXED_SPEEDS_PROVIDER_INPUTS,
+    FCC_FIXED_SPEEDS_PROVIDER_OUTPUTS,
 )
 from network_idx.config import (
     RAW_DIR_FCC_SPEEDS,
@@ -90,10 +91,10 @@ def extract_zip_file(zip_path:Path, extract_to:Path) -> Path:
         zip_ref.extract(csv_name, path=extract_to)
     return dest
 
-# Loading
-def load_csv_to_df(csv_path:Path) -> pd.DataFrame:
+# Loading csv and creating features
+def load_csv_for_block_df(csv_path:Path) -> pd.DataFrame:
     """
-    Loads the CSV file into a pandas DataFrame.
+    Loads the CSV file into a pandas DataFrame at a block-level.
     """
     logger.info(f"Loading CSV {csv_path} into DataFrame")
     df = pd.read_csv(csv_path,
@@ -109,6 +110,31 @@ def load_csv_to_df(csv_path:Path) -> pd.DataFrame:
                      })
     df = df[df["technology"].isin(FIXED_TECHNOLOGIES_MAPPING.values())].copy()
     df['technology_lbl'] = df['technology'].map({v: k for k, v in FIXED_TECHNOLOGIES_MAPPING.items()}).str.lower()
+    return df
+
+# Features for provider-level analysis
+def load_csv_for_providers_df(csv_path: Path) -> pd.DataFrame:
+    """
+    Loads the CSV file into a pandas DataFrame at a provider-block level.
+    """
+    logger.info(f"Loading CSV {csv_path} for provider-level analysis")
+    df = pd.read_csv(csv_path,
+                     usecols=FCC_FIXED_SPEEDS_PROVIDER_INPUTS,
+                     dtype={
+                         "state_usps": str,
+                         "block_geoid": str,
+                         "frn": str,
+                         "provider_id": str,
+                         "brand_name": str,
+                         "location_id": str,
+                         "technology": int,
+                         "max_advertised_download_speed": float,
+                         "max_advertised_upload_speed": float
+                     })
+    df = df[df["technology"].isin(FIXED_TECHNOLOGIES_MAPPING.values())].copy()
+    df["technology_lbl"] = df["technology"].map(
+        {v: k for k, v in FIXED_TECHNOLOGIES_MAPPING.items()}
+    ).str.lower()
     return df
 
 # Aggregation
@@ -149,46 +175,106 @@ def aggregate_to_block_geoid(df:pd.DataFrame) -> pd.DataFrame:
     existing = [c for c in FCC_FIXED_SPEED_OUTPUTS if c in pivoted.columns]
     return pivoted[existing]
 
+# Function to aggregate to provider-block level
+def aggregate_to_provider_block(df: pd.DataFrame) -> pd.DataFrame:
+    logger.info("Aggregating data to provider + block_geoid level")
+    GROUP_COLS = ["state_usps","block_geoid", "frn", "provider_id", "brand_name", "technology_lbl"]
+    agg = df.groupby(GROUP_COLS, as_index=False).agg(
+        location_count=("location_id", "nunique"),
+        max_download_speed=("max_advertised_download_speed", "max"),
+        max_upload_speed=("max_advertised_upload_speed", "max"),
+    )
+    pivoted = agg.pivot_table(
+        index=["state_usps","block_geoid","frn", "provider_id", "brand_name"],
+        columns="technology_lbl",
+        values=["location_count", "max_download_speed", "max_upload_speed"],
+        aggfunc="first",
+    )
+    pivoted.columns = [f"{tech}_{metric}" for metric, tech in pivoted.columns]
+    pivoted = pivoted.reset_index()
+
+    # Add state_fips
+    pivoted['state_fips'] = pivoted['state_usps'].map(STATE_USPS_TO_FIPS)
+
+    # Ensure all expected output columns exist
+    for col in FCC_FIXED_SPEEDS_PROVIDER_OUTPUTS:
+        if col not in pivoted.columns:
+            pivoted[col] = pd.NA
+
+    existing = [c for c in FCC_FIXED_SPEEDS_PROVIDER_OUTPUTS if c in pivoted.columns]
+    return pivoted[existing]
+
 # Function to process all files for a given state and save the final parquet
 def process_state(
         state_usps:str,
         overwrite:bool=False
-        ) -> Path | None:
+        ) -> tuple[Path | None, Path | None]:
     """
     Process all files for a given state and save the final parquet.
     """
     logger.info(f"Processing state {state_usps}")
     fips = STATE_USPS_TO_FIPS[state_usps]
-    out_path = PROCESSED_DIR_FCC_SPEEDS / f"fcc_fixed_speeds_{state_usps}_{fips}.parquet"
-    if out_path.exists() and not overwrite:
-        logger.info(f"Processed file {out_path} already exists. Skipping processing for {state_usps}.")
-        return out_path
+    out_block = PROCESSED_DIR_FCC_SPEEDS / f"fcc_fixed_speeds_{state_usps}_{fips}.parquet"
+    out_provider = PROCESSED_DIR_FCC_SPEEDS / f"fcc_fixed_speeds_providers_{state_usps}_{fips}.parquet"
+
+    block_done = out_block.exists() and not overwrite
+    provider_done = out_provider.exists() and not overwrite
+
+    if block_done and provider_done:
+        logger.info(f"Both processed files for {state_usps} already exist. Skipping.")
+        return out_block, out_provider
+    
     zip_files = list(RAW_DIR_FCC_SPEEDS.glob(f"bdc_{fips}_*_fixed_broadband_*.zip"))
+
     if not zip_files:
         logger.warning(f"No zip files found for state {state_usps} (FIPS {fips}). Skipping.")
-        return None
+        return None, None
+    
     logger.info(f"Found {len(zip_files)} zip files for state {state_usps}. Beginning processing.")
-    dfs = []
+    block_dfs = []
+    provider_dfs = []
+
     for zip_file in zip_files:
         try:
             csv_path = extract_zip_file(zip_file, EXTRACTED_DIR_FCC_SPEEDS / state_usps)
-            df = load_csv_to_df(csv_path)
-            logger.info(f"Loaded data for {state_usps} from {csv_path} with {len(df)} rows. Aggregating...")
-            dfs.append(df)
+            if not block_done:
+                block_dfs.append(load_csv_for_block_df(csv_path))
+            if not provider_done:
+                provider_dfs.append(load_csv_for_providers_df(csv_path))
+            logger.info(f"Successfully extracted {zip_file} for state {state_usps}")
         except Exception as e:
             logger.error(f"Error processing {zip_file}: {e}")
-    if not dfs:
-        logger.warning(f"No valid dataframes created for state {state_usps}. Skipping saving.")
-        return None
-    combined_df = pd.concat(dfs, ignore_index=True)
-    logger.info(f"Combined dataframe for {state_usps} has {len(combined_df)} rows. Aggregating to block_geoid...")
-    block_features = aggregate_to_block_geoid(combined_df)
-    logger.info(f"[Aggregation complete] Final dataframe for {state_usps} has {len(block_features)} rows. Saving to parquet...")
-    # Create output directory if it doesn't exist
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    block_features.to_parquet(out_path, index=False)
-    logger.info(f"Saved processed data for {state_usps} to {out_path}")
-    return out_path
+    
+    out_block_path = None
+    out_provider_path = None
+
+    # Block-level parquet
+    if block_done:
+        out_block_path = out_block
+    elif block_dfs:
+        combined = pd.concat(block_dfs, ignore_index=True)
+        logger.info(f"Combined block df for {state_usps}: {len(combined)} rows. Aggregating...")
+        block_features = aggregate_to_block_geoid(combined)
+        logger.info(f"Block features for {state_usps}: {len(block_features)} rows. Saving...")
+        out_block.parent.mkdir(parents=True, exist_ok=True)
+        block_features.to_parquet(out_block, index=False)
+        logger.info(f"Saved block-level data to {out_block}")
+        out_block_path = out_block
+
+    # Provider-level parquet
+    if provider_done:
+        out_provider_path = out_provider
+    elif provider_dfs:
+        combined = pd.concat(provider_dfs, ignore_index=True)
+        logger.info(f"Combined provider df for {state_usps}: {len(combined)} rows. Aggregating...")
+        provider_features = aggregate_to_provider_block(combined)
+        logger.info(f"Provider features for {state_usps}: {len(provider_features)} rows. Saving...")
+        out_provider.parent.mkdir(parents=True, exist_ok=True)
+        provider_features.to_parquet(out_provider, index=False)
+        logger.info(f"Saved provider-level data to {out_provider}")
+        out_provider_path = out_provider
+
+    return out_block_path, out_provider_path
 
 # ── CLI entry point 
 

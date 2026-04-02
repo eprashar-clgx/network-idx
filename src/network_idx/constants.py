@@ -155,9 +155,9 @@ FCC_FIXED_SPEED_INPUTS = [
 ]
 
 FCC_FIXED_SPEED_OUTPUTS= [
-    "block_geoid",
     "state_usps",
     "state_fips",
+    "block_geoid",
     "cable_location_count",
     "cable_provider_count",
     "cable_max_download_speed",
@@ -173,6 +173,7 @@ FCC_FIXED_SPEED_OUTPUTS= [
 ]
 
 FCC_FIXED_SPEEDS_PROVIDER_INPUTS = [
+    "state_usps",
     "block_geoid",
     "frn",
     "provider_id",
@@ -185,6 +186,7 @@ FCC_FIXED_SPEEDS_PROVIDER_INPUTS = [
 
 FCC_FIXED_SPEEDS_PROVIDER_OUTPUTS = [
     "state_usps",
+    "state_fips",
     "block_geoid",
     "frn",
     "provider_id",
