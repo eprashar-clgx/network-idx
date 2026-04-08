@@ -172,6 +172,24 @@ FCC_FIXED_SPEED_OUTPUTS= [
     "fiber_max_upload_speed"
 ]
 
+FCC_FIXED_SPEED_TRACT_OUTPUTS = [
+    "tract_geoid",
+    "state_usps",
+    "state_fips",
+    "cable_location_count",
+    "cable_provider_count",
+    "cable_max_download_speed",
+    "cable_max_upload_speed",
+    "copper_location_count",
+    "copper_provider_count",
+    "copper_max_download_speed",
+    "copper_max_upload_speed",
+    "fiber_location_count",
+    "fiber_provider_count",
+    "fiber_max_download_speed",
+    "fiber_max_upload_speed",
+]
+
 FCC_FIXED_SPEEDS_PROVIDER_INPUTS = [
     "state_usps",
     "block_geoid",

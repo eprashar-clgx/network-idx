@@ -27,6 +27,9 @@ PROCESSED_DIR_FCC = Path("data/processed/fcc")
 PROCESSED_DIR_FCC_SPEEDS = Path("data/processed/fcc/speeds")
 PROCESSED_DIR_FCC_BROADBAND_COVERAGE = Path("data/processed/fcc/broadband_coverage")
 
+# Feature engineering output paths
+FEATURES_DIR_FCC_SPEEDS_TRACT = Path("data/features/fcc/speeds/tract")
+
 # GCS Settings
 GCS_BUCKET_NAME = os.getenv("GCS_BUCKET_NAME")
 GCS_PROJECT_ID = os.getenv("GCS_PROJECT_ID")
