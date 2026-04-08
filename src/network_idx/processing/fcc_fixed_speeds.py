@@ -168,7 +168,7 @@ def aggregate_to_block_geoid(df:pd.DataFrame) -> pd.DataFrame:
     # Ensuring all 12 feature columns exist in the final dataframe
     for tech in FIXED_TECHNOLOGIES_MAPPING.keys():
         for metric in ["location_count", "provider_count", "max_download_speed", "max_upload_speed"]:
-            col_name = f"{tech}_{metric}"
+            col_name = f"{tech.lower()}_{metric}"
             if col_name not in pivoted.columns:
                 pivoted[col_name] = pd.NA
     
