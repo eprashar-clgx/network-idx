@@ -1,23 +1,39 @@
 """
 Pipeline per state:
-1. 3 zip files already exist
-2. Unzip each file to extract csvs
---- Finish wriiting this docstring ---
+1. 3 zip files (one per technology: Cable, Copper, Fiber) already exist in data/raw/fcc/speeds/
+2. Unzip each file to extract CSV into data/extracted/fcc/speeds/{STATE}/
+3. From each CSV, produce two aggregations:
+   a. Block-level: aggregate to block_geoid with location counts, provider counts, and max speeds per technology
+   b. Provider-block-level: aggregate to (block_geoid, provider) with location counts and max speeds per technology
+4. Combine all technology CSVs per state, pivot by technology, and save as parquet
 
-Output Schema for Block (one row per block_geoid, 12 feature columns):
-- block_geoid
-- state_usps
-- state_fips
-- {tech}_location_count
-- {tech}_provider_count
-- {tech}_max_download_speed
-- {tech}_max_upload_speed
-...repeated for cable/copper/fiber
+Output Schema — Block (one row per block_geoid, 15 columns):
+    state_usps, state_fips, block_geoid,
+    {tech}_location_count, {tech}_provider_count,
+    {tech}_max_download_speed, {tech}_max_upload_speed
+    ...repeated for cable/copper/fiber
 
-Output Schema for Provider-Block (one row per provider-block combination, more granular):
+Output Schema — Provider-Block (one row per provider-block combination, 15 columns):
+    state_usps, state_fips, block_geoid, frn, provider_id, brand_name,
+    {tech}_location_count, {tech}_max_download_speed, {tech}_max_upload_speed
+    ...repeated for cable/copper/fiber
+
+Output files (in data/processed/fcc/speeds/):
+    fcc_fixed_speeds_{STATE}_{FIPS}.parquet
+    fcc_fixed_speeds_providers_{STATE}_{FIPS}.parquet
 
 Usage:
+    # Process a single state (default: AL)
+    python -m network_idx.processing.fcc_fixed_speeds
 
+    # Process specific states
+    python -m network_idx.processing.fcc_fixed_speeds --states AK AL CA
+
+    # Process all states
+    python -m network_idx.processing.fcc_fixed_speeds --all
+
+    # Overwrite existing parquet files
+    python -m network_idx.processing.fcc_fixed_speeds --all --overwrite
 """
 
 import argparse
