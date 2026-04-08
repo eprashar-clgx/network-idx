@@ -42,6 +42,9 @@ GCS_PREFIX_RAW_FCC_SPEEDS = "network_idx/raw/fcc/speeds"
 GCS_PREFIX_EXTRACTED_FCC_SPEEDS = "network_idx/extracted/fcc/speeds"
 GCS_PREFIX_PROCESSED_FCC_SPEEDS = "network_idx/processed/fcc/speeds"
 
+# GCS Storage settings — Features (tract-level)
+GCS_PREFIX_FEATURES_FCC_SPEEDS_TRACT = "network_idx/features/fcc/speeds/tract"
+
 # GCS Storage settings — Broadband Coverage
 GCS_PREFIX_RAW_FCC_BROADBAND_COVERAGE = "network_idx/raw/fcc/broadband_coverage"
 GCS_PREFIX_EXTRACTED_FCC_BROADBAND_COVERAGE = "network_idx/extracted/fcc/broadband_coverage"
