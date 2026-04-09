@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-## FCC CONSTANTS
+## DATA SOURCES
 
 FCC_URL = "https://broadbandmap.fcc.gov/data-download/nationwide-data?version=jun2025&pubDataVer=jun2025"
 
@@ -259,3 +259,11 @@ FCC_FIXED_COVERAGE_OUTPUTS = [
     "fiber_more_than_100_20",
 ]
 
+# Census BAF 2020 — Output columns
+CENSUS_BAF_OUTPUTS = [
+    "block_geoid",
+    "state_fips",
+    "county_geoid",
+    "tract_geoid",
+    "place_geoid",
+]
