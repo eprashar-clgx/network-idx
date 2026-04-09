@@ -1,16 +1,26 @@
 """
-Pipeline per state (FCC Fixed Broadband Coverage Summary):
+Pipeline for FCC Fixed Broadband Coverage Summary:
+
+Place (per-state):
 1. 1 zip file per state already exists in data/raw/fcc/broadband_coverage
 2. Unzip to extract CSV
-3. Load CSV, filter and create features:
+3. Load CSV, filter and create features
+4. Pivot by technology so each geography row has 9 feature columns (3 techs × 3 metrics)
+5. Save as one parquet file per state
+
+County (nationwide):
+1. 1 nationwide zip file in data/raw/fcc/broadband_coverage
+2. Unzip to extract CSV
+3. Load CSV, filter to geography_type == "County" and create features
+4. Split by state FIPS prefix, pivot, and save one parquet per state
+
+Common filters/features:
    - area_data_type == "Total"
    - biz_res == "R"
    - technology in ["Copper", "Cable", "Fiber"]
    - speed_100_20 as-is
    - less_than_100_20 = MAX(speed_02_02, speed_10_1, speed_25_3)
    - more_than_100_20 = MAX(speed_250_25, speed_1000_100)
-4. Pivot by technology so each geography row has 9 feature columns (3 techs × 3 metrics)
-5. Save as one parquet file per state
 """
 
 import argparse
@@ -37,6 +47,9 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s"
     )
 logger = logging.getLogger(__name__)
+
+# Reverse mapping: FIPS -> USPS
+FIPS_TO_USPS = {v: k for k, v in STATE_USPS_TO_FIPS.items()}
 
 # Filename parsing
 def parse_fips_from_filename(filename:str) -> str | None:
@@ -84,9 +97,13 @@ def extract_zip_file(zip_path:Path, extract_to:Path) -> Path:
     return dest
 
 # Loading
-def load_csv_to_df(csv_path:Path) -> pd.DataFrame:
+def load_csv_to_df(
+        csv_path:Path,
+        geography_type:str | None=None
+        ) -> pd.DataFrame:
     """
     Loads the CSV file into a pandas DataFrame.
+    If geography_type is provided, filters to that geography_type (e.g. "County").
     """
     logger.info(f"Loading CSV {csv_path} into DataFrame")
     df = pd.read_csv(csv_path,
@@ -94,7 +111,7 @@ def load_csv_to_df(csv_path:Path) -> pd.DataFrame:
                      dtype={
                          "area_data_type": str,
                          "geography_type": str,
-                         "geography_id": int,
+                         "geography_id": str,
                          "geography_desc": str,
                          "geography_desc_full": str,
                          "total_units": int,
@@ -107,12 +124,16 @@ def load_csv_to_df(csv_path:Path) -> pd.DataFrame:
                          "speed_250_25":float,
                          "speed_1000_100":float,
                          })
-    # Filters
-    df = df[
+   # Filters
+    mask = (
         (df["area_data_type"] == "Total")
         & (df["biz_res"] == "R")
         & (df["technology"].isin(FCC_FIXED_COVERAGE_TECHNOLOGIES))
-    ].copy()
+    )
+    if geography_type:
+        mask = mask & (df["geography_type"] == geography_type)
+
+    df = df[mask].copy()
     logger.info(f"After filtering: {len(df)} rows")
     return df
 
@@ -195,12 +216,81 @@ def process_state(
     logger.info(f"Saved processed data for {state_usps} to {out_path}")
     return out_path
 
+# ── County processing (nationwide zip file) 
+def process_county(
+        states_to_process:list[str],
+        overwrite:bool=False
+        ) -> list[Path]:
+    """
+    Process county-level coverage from the nationwide zip file.
+    Extracts CSV once, filters to County rows, splits by state, and saves
+    one parquet per state.
+    """
+    # Find the nationwide zip
+    zip_files = list(RAW_DIR_FCC_BROADBAND_COVERAGE.glob("bdc_us_fixed_broadband_summary_by_geography_*.zip"))
+    if not zip_files:
+        logger.error("No nationwide zip file (bdc_us_*) found in raw directory. Run the downloader with --geography other first.")
+        return []
+    zip_file = zip_files[0]
+    if len(zip_files) > 1:
+        logger.warning(f"Multiple nationwide zips found. Using: {zip_file.name}")
+
+    # Extract
+    csv_path = extract_zip_file(zip_file, EXTRACTED_DIR_FCC_BROADBAND_COVERAGE / "us")
+
+    # Load with County filter
+    df = load_csv_to_df(csv_path, geography_type="County")
+    if df.empty:
+        logger.warning("No County rows found after filtering. Nothing to process.")
+        return []
+
+    # Derive state FIPS from the first 2 digits of geography_id (5-digit county FIPS)
+    df["state_fips"] = df["geography_id"].str[:2]
+
+    # Convert requested USPS codes to FIPS for filtering
+    requested_fips = {STATE_USPS_TO_FIPS[s] for s in states_to_process}
+
+    output_paths: list[Path] = []
+    PROCESSED_DIR_FCC_BROADBAND_COVERAGE.mkdir(parents=True, exist_ok=True)
+
+    for state_fips, state_df in df.groupby("state_fips"):
+        if state_fips not in FIPS_TO_USPS:
+            logger.warning(f"Unknown state FIPS {state_fips} in county data. Skipping.")
+            continue
+        if state_fips not in requested_fips:
+            continue
+
+        state_usps = FIPS_TO_USPS[state_fips]
+        out_path = PROCESSED_DIR_FCC_BROADBAND_COVERAGE / f"fcc_fixed_coverage_county_{state_usps}_{state_fips}.parquet"
+
+        if out_path.exists() and not overwrite:
+            logger.info(f"{out_path} already exists. Skipping {state_usps}.")
+            output_paths.append(out_path)
+            continue
+
+        # Drop the helper column before feature engineering
+        state_df = state_df.drop(columns=["state_fips"])
+
+        logger.info(f"Processing county data for {state_usps} ({len(state_df)} rows)")
+        features = create_coverage_features(state_df)
+        logger.info(f"County features for {state_usps}: {len(features)} rows, {len(features.columns)} columns")
+        features.to_parquet(out_path, index=False)
+        logger.info(f"Saved {out_path}")
+        output_paths.append(out_path)
+
+    return output_paths
+
 # ── CLI entry point 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Create place-level coverage features from FCC Fixed Broadband Summary data and save as parquet files."
+        description="Create coverage features from FCC Fixed Broadband Summary data and save as parquet files."
     )
+    parser.add_argument(
+        "--geography", type=str, default="place",
+        choices=["place", "county"],
+        help="Geography level to process: 'place' (per-state zips) or 'county' (nationwide zip)."
+        )
     parser.add_argument(
         "--states", type=str, nargs="+", default=["AL"],
         choices=STATE_USPS_TO_FIPS.keys(),
@@ -215,10 +305,6 @@ if __name__ == "__main__":
         "--overwrite", action="store_true", default=False,
         help="Whether to overwrite existing processed files. Defaults to False."
     )
-    parser.add_argument(
-        "--output-dir", type=Path, default=PROCESSED_DIR_FCC_BROADBAND_COVERAGE,
-        help="Data directory to save processed parquet files into. Defaults to 'data/processed/fcc/speeds'"
-    )
     args = parser.parse_args()
     valid = list(STATE_USPS_TO_FIPS.keys())
     bad = [s for s in args.states if s not in valid]
@@ -226,9 +312,16 @@ if __name__ == "__main__":
         logger.error(f"Invalid state USPS codes: {bad}. Must be one or more of: {list(valid)}")
         exit(1)
     states_to_process = valid if args.all else args.states
-    logger.info(f"Starting processing for states: {states_to_process}")
-    for state in states_to_process:
+    logger.info(f"Starting {args.geography} processing for states: {states_to_process}")
+
+    if args.geography == "place":
+        for state in states_to_process:
+            try:
+                process_state(state, overwrite=args.overwrite)
+            except Exception as e:
+                logger.error(f"Error processing state {state}: {e}")
+    else:
         try:
-            process_state(state, overwrite=args.overwrite)
+            process_county(states_to_process, overwrite=args.overwrite)
         except Exception as e:
-            logger.error(f"Error processing state {state}: {e}")
+            logger.error(f"Error processing county data: {e}")
