@@ -16,11 +16,17 @@ RAW_DIR_FCC = Path("data/raw/fcc")
 RAW_DIR_FCC_SPEEDS = Path("data/raw/fcc/speeds")
 RAW_DIR_FCC_BROADBAND_COVERAGE = Path("data/raw/fcc/broadband_coverage")
 
+# Census BAF
+RAW_DIR_CENSUS_BAF = Path("data/raw/census/baf2020")
 
 EXTRACTED_DIR = Path("data/extracted")
 EXTRACTED_DIR_FCC = Path("data/extracted/fcc")
 EXTRACTED_DIR_FCC_SPEEDS = Path("data/extracted/fcc/speeds")
 EXTRACTED_DIR_FCC_BROADBAND_COVERAGE = Path("data/extracted/fcc/broadband_coverage")
+
+# Census BAF
+EXTRACTED_DIR_CENSUS_BAF = Path("data/extracted/census/baf2020")
+
 
 PROCESSED_DIR = Path("data/processed")
 PROCESSED_DIR_FCC = Path("data/processed/fcc")

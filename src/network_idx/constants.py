@@ -5,6 +5,9 @@ from pathlib import Path
 
 FCC_URL = "https://broadbandmap.fcc.gov/data-download/nationwide-data?version=jun2025&pubDataVer=jun2025"
 
+## CENSUS CONSTANTS
+CENSUS_BAF_2020_BASE_URL = "https://www2.census.gov/geo/docs/maps-data/data/baf2020/"
+
 # Technology names must match the text in the first <td> of each table row
 # exactly as it appears on the page.
 FIXED_TECHNOLOGIES_FOR_DOWNLOAD = [
