@@ -39,6 +39,9 @@ PROCESSED_DIR_CENSUS_BAF = Path("data/processed/census/baf2020")
 # Feature engineering output paths
 FEATURES_DIR_FCC_SPEEDS_TRACT = Path("data/features/fcc/speeds/tract")
 
+# Feature engineering — Broadband Coverage
+FEATURES_DIR_FCC_COVERAGE_COUNTY_RESIDUALS = Path("data/features/fcc/broadband_coverage/county_residuals")
+
 # GCS Settings
 GCS_BUCKET_NAME = os.getenv("GCS_BUCKET_NAME")
 GCS_PROJECT_ID = os.getenv("GCS_PROJECT_ID")

@@ -267,3 +267,14 @@ CENSUS_BAF_OUTPUTS = [
     "tract_geoid",
     "place_geoid",
 ]
+
+FCC_COVERAGE_TIER_METRICS = ["speed_100_20", "less_than_100_20", "more_than_100_20"]
+
+FCC_COVERAGE_COUNTY_RESIDUAL_OUTPUTS = [
+    "county_geoid",
+    "state_fips",
+    "county_total_units",
+    "places_total_units",
+    "residual_units",
+    "place_count",
+] + [f"{tech.lower()}_{metric}" for tech in FCC_FIXED_COVERAGE_TECHNOLOGIES for metric in FCC_COVERAGE_TIER_METRICS]
