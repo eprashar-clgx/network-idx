@@ -48,6 +48,11 @@ FEATURES_DIR_FCC_SPEEDS_TRACT = Path("data/features/fcc/speeds/tract")
 # Feature engineering — Broadband Coverage
 FEATURES_DIR_FCC_COVERAGE_COUNTY_RESIDUALS = Path("data/features/fcc/broadband_coverage/county_residuals")
 
+# Feature engineering — Broadband Coverage block & tract
+FEATURES_DIR_FCC_COVERAGE_BLOCK = Path("data/features/fcc/broadband_coverage/block")
+FEATURES_DIR_FCC_COVERAGE_TRACT = Path("data/features/fcc/broadband_coverage/tract")
+
+
 # GCS Settings
 GCS_BUCKET_NAME = os.getenv("GCS_BUCKET_NAME")
 GCS_PROJECT_ID = os.getenv("GCS_PROJECT_ID")

@@ -353,3 +353,24 @@ FCC_COVERAGE_COUNTY_RESIDUAL_OUTPUTS = [
     "residual_units",
     "place_count",
 ] + [f"{tech.lower()}_{metric}" for tech in FCC_FIXED_COVERAGE_TECHNOLOGIES for metric in FCC_COVERAGE_TIER_METRICS]
+
+# Block-level coverage estimate outputs
+FCC_COVERAGE_BLOCK_OUTPUTS = [
+    "block_geoid",
+    "state_fips",
+    "state_usps",
+    "county_geoid",
+    "tract_geoid",
+    "place_geoid",
+    "source",
+    "census_housing_units",
+    "estimated_fcc_units",
+] + [f"{tech.lower()}_{metric}" for tech in FCC_FIXED_COVERAGE_TECHNOLOGIES for metric in FCC_COVERAGE_TIER_METRICS]
+
+FCC_COVERAGE_TRACT_OUTPUTS = [
+    "tract_geoid",
+    "state_fips",
+    "state_usps",
+    "estimated_census_housing_units",
+    "estimated_fcc_units",
+] + [f"{tech.lower()}_{metric}" for tech in FCC_FIXED_COVERAGE_TECHNOLOGIES for metric in FCC_COVERAGE_TIER_METRICS]
