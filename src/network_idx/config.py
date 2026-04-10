@@ -39,6 +39,9 @@ PROCESSED_DIR_FCC_BROADBAND_COVERAGE = Path("data/processed/fcc/broadband_covera
 # Census BAF — Processed
 PROCESSED_DIR_CENSUS_BAF = Path("data/processed/census/baf2020")
 
+# Census Address Count Listing — Processed
+PROCESSED_DIR_CENSUS_ACL = Path("data/processed/census/addcountlisting2025")
+
 # Feature engineering output paths
 FEATURES_DIR_FCC_SPEEDS_TRACT = Path("data/features/fcc/speeds/tract")
 

@@ -210,6 +210,17 @@ CENSUS_ACL_STATE_NAMES = {
     "VI": "UnitedStatesVirginIslands",
 }
 
+# Census Address Count Listing — Output columns
+CENSUS_ACL_OUTPUTS = [
+    "block_geoid",
+    "state_fips",
+    "state_usps",
+    "county_geoid",
+    "tract_geoid",
+    "total_housing_units",
+    "total_group_quarters",
+]
+
 # FCC Fixed columns for advertised speed analysis
 FCC_FIXED_SPEED_INPUTS = [
     "location_id",
