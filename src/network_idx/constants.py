@@ -8,6 +8,9 @@ FCC_URL = "https://broadbandmap.fcc.gov/data-download/nationwide-data?version=ju
 ## CENSUS CONSTANTS
 CENSUS_BAF_2020_BASE_URL = "https://www2.census.gov/geo/docs/maps-data/data/baf2020/"
 
+# Census Address Count Listing
+CENSUS_ACL_2025_BASE_URL = "https://www2.census.gov/geo/pvs/addcountlisting/2025/"
+
 # Technology names must match the text in the first <td> of each table row
 # exactly as it appears on the page.
 FIXED_TECHNOLOGIES_FOR_DOWNLOAD = [
@@ -144,6 +147,67 @@ STATE_USPS_TO_FIPS = {
     "MP": "69",
     "PR": "72",
     "VI": "78",
+}
+
+# Mapping: STATE_USPS to filename stem used by Census for Address Count Listing.
+# Census strips spaces/hyphens from state names in filenames.
+CENSUS_ACL_STATE_NAMES = {
+    "AL": "Alabama",
+    "AK": "Alaska",
+    "AZ": "Arizona",
+    "AR": "Arkansas",
+    "CA": "California",
+    "CO": "Colorado",
+    "CT": "Connecticut",
+    "DE": "Delaware",
+    "DC": "DistrictofColumbia",
+    "FL": "Florida",
+    "GA": "Georgia",
+    "HI": "Hawaii",
+    "ID": "Idaho",
+    "IL": "Illinois",
+    "IN": "Indiana",
+    "IA": "Iowa",
+    "KS": "Kansas",
+    "KY": "Kentucky",
+    "LA": "Louisiana",
+    "ME": "Maine",
+    "MD": "Maryland",
+    "MA": "Massachusetts",
+    "MI": "Michigan",
+    "MN": "Minnesota",
+    "MS": "Mississippi",
+    "MO": "Missouri",
+    "MT": "Montana",
+    "NE": "Nebraska",
+    "NV": "Nevada",
+    "NH": "NewHampshire",
+    "NJ": "NewJersey",
+    "NM": "NewMexico",
+    "NY": "NewYork",
+    "NC": "NorthCarolina",
+    "ND": "NorthDakota",
+    "OH": "Ohio",
+    "OK": "Oklahoma",
+    "OR": "Oregon",
+    "PA": "Pennsylvania",
+    "RI": "RhodeIsland",
+    "SC": "SouthCarolina",
+    "SD": "SouthDakota",
+    "TN": "Tennessee",
+    "TX": "Texas",
+    "UT": "Utah",
+    "VT": "Vermont",
+    "VA": "Virginia",
+    "WA": "Washington",
+    "WV": "WestVirginia",
+    "WI": "Wisconsin",
+    "WY": "Wyoming",
+    "AS": "AmericanSamoa",
+    "GU": "Guam",
+    "MP": "CommonwealthoftheNorthernMarianaIslands",
+    "PR": "PuertoRico",
+    "VI": "UnitedStatesVirginIslands",
 }
 
 # FCC Fixed columns for advertised speed analysis

@@ -19,6 +19,9 @@ RAW_DIR_FCC_BROADBAND_COVERAGE = Path("data/raw/fcc/broadband_coverage")
 # Census BAF
 RAW_DIR_CENSUS_BAF = Path("data/raw/census/baf2020")
 
+# Census Address Count Listing
+RAW_DIR_CENSUS_ACL = Path("data/raw/census/addcountlisting2025")
+
 EXTRACTED_DIR = Path("data/extracted")
 EXTRACTED_DIR_FCC = Path("data/extracted/fcc")
 EXTRACTED_DIR_FCC_SPEEDS = Path("data/extracted/fcc/speeds")
