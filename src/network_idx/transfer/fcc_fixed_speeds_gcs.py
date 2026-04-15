@@ -108,7 +108,7 @@ def parse_usps_from_processed_filename(filename: str) -> str | None:
     Extracts state USPS code from a processed parquet filename.
     Pattern: fcc_fixed_speeds_{STATE_USPS}_{STATE_FIPS}.parquet
     '''
-    match = re.match(r"fcc_fixed_speeds_(?:providers_)?([A-Z]{2})_\d{2}\.parquet", filename)
+    match = re.match(r"fcc_fixed_speeds_(?:providers_(?:block_|h3_))?([A-Z]{2})_\d{2}\.parquet", filename)
     return match.group(1) if match else None
 
 # Main upload function
