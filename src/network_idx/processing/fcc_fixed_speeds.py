@@ -2,9 +2,10 @@
 Pipeline per state:
 1. 3 zip files (one per technology: Cable, Copper, Fiber) already exist in data/raw/fcc/speeds/
 2. Unzip each file to extract CSV into data/extracted/fcc/speeds/{STATE}/
-3. From each CSV, produce two aggregations:
+3. From each CSV, produce three aggregations:
    a. Block-level: aggregate to block_geoid with location counts, provider counts, and max speeds per technology
    b. Provider-block-level: aggregate to (block_geoid, provider) with location counts and max speeds per technology
+   c. Provider-h3-level: aggregate to (h3_res8_id, provider) with location counts and max speeds per technology
 4. Combine all technology CSVs per state, pivot by technology, and save as parquet
 
 Output Schema — Block (one row per block_geoid, 15 columns):
@@ -18,9 +19,15 @@ Output Schema — Provider-Block (one row per provider-block combination, 15 col
     {tech}_location_count, {tech}_max_download_speed, {tech}_max_upload_speed
     ...repeated for cable/copper/fiber
 
+Output Schema — H3-Block (one row per provider-h3 combination, 15 columns):
+    state_usps, state_fips, h3_res8_id, frn, provider_id, brand_name,
+    {tech}_location_count, {tech}_max_download_speed, {tech}_max_upload_speed
+    ...repeated for cable/copper/fiber
+
 Output files (in data/processed/fcc/speeds/):
     fcc_fixed_speeds_{STATE}_{FIPS}.parquet
-    fcc_fixed_speeds_providers_{STATE}_{FIPS}.parquet
+    fcc_fixed_speeds_providers_block_{STATE}_{FIPS}.parquet
+    fcc_fixed_speeds_providers_h3_{STATE}_{FIPS}.parquet
 
 Usage:
     # Process a single state (default: AL)
@@ -49,6 +56,8 @@ from network_idx.constants import (
     FCC_FIXED_SPEED_OUTPUTS,
     FCC_FIXED_SPEEDS_PROVIDER_INPUTS,
     FCC_FIXED_SPEEDS_PROVIDER_OUTPUTS,
+    FCC_FIXED_SPEEDS_PROVIDER_H3_INPUTS,
+    FCC_FIXED_SPEEDS_PROVIDER_H3_OUTPUTS
 )
 from network_idx.config import (
     RAW_DIR_FCC_SPEEDS,
@@ -153,6 +162,31 @@ def load_csv_for_providers_df(csv_path: Path) -> pd.DataFrame:
     ).str.lower()
     return df
 
+# Function to load CSV for provider-H3 level analysis
+def load_csv_for_providers_h3_df(csv_path: Path) -> pd.DataFrame:
+    """
+    Loads the CSV file into a DataFrame for provider-H3 level analysis.
+    """
+    logger.info(f"Loading CSV {csv_path} for provider-H3 level analysis")
+    df = pd.read_csv(csv_path,
+                     usecols=FCC_FIXED_SPEEDS_PROVIDER_H3_INPUTS,
+                     dtype={
+                         "state_usps": str,
+                         "h3_res8_id": str,
+                         "frn": str,
+                         "provider_id": str,
+                         "brand_name": str,
+                         "location_id": str,
+                         "technology": int,
+                         "max_advertised_download_speed": float,
+                         "max_advertised_upload_speed": float
+                     })
+    df = df[df["technology"].isin(FIXED_TECHNOLOGIES_MAPPING.values())].copy()
+    df["technology_lbl"] = df["technology"].map(
+        {v: k for k, v in FIXED_TECHNOLOGIES_MAPPING.items()}
+    ).str.lower()
+    return df
+
 # Aggregation
 def aggregate_to_block_geoid(df:pd.DataFrame) -> pd.DataFrame:
     """
@@ -220,49 +254,83 @@ def aggregate_to_provider_block(df: pd.DataFrame) -> pd.DataFrame:
     existing = [c for c in FCC_FIXED_SPEEDS_PROVIDER_OUTPUTS if c in pivoted.columns]
     return pivoted[existing]
 
+# Function to aggregate to provider-H3 level
+def aggregate_to_provider_h3(df: pd.DataFrame) -> pd.DataFrame:
+    """Aggregates to provider + h3_res8_id level, pivoted by technology."""
+    logger.info("Aggregating data to provider + h3_res8_id level")
+    GROUP_COLS = ["state_usps", "h3_res8_id", "frn", "provider_id", "brand_name", "technology_lbl"]
+    agg = df.groupby(GROUP_COLS, as_index=False).agg(
+        location_count=("location_id", "nunique"),
+        max_download_speed=("max_advertised_download_speed", "max"),
+        max_upload_speed=("max_advertised_upload_speed", "max"),
+    )
+    pivoted = agg.pivot_table(
+        index=["state_usps", "h3_res8_id", "frn", "provider_id", "brand_name"],
+        columns="technology_lbl",
+        values=["location_count", "max_download_speed", "max_upload_speed"],
+        aggfunc="first",
+    )
+    pivoted.columns = [f"{tech}_{metric}" for metric, tech in pivoted.columns]
+    pivoted = pivoted.reset_index()
+
+    pivoted['state_fips'] = pivoted['state_usps'].map(STATE_USPS_TO_FIPS)
+
+    for col in FCC_FIXED_SPEEDS_PROVIDER_H3_OUTPUTS:
+        if col not in pivoted.columns:
+            pivoted[col] = pd.NA
+
+    existing = [c for c in FCC_FIXED_SPEEDS_PROVIDER_H3_OUTPUTS if c in pivoted.columns]
+    return pivoted[existing]
+
 # Function to process all files for a given state and save the final parquet
 def process_state(
         state_usps:str,
         overwrite:bool=False
-        ) -> tuple[Path | None, Path | None]:
+        ) -> tuple[Path | None, Path | None, Path | None]:
     """
     Process all files for a given state and save the final parquet.
     """
     logger.info(f"Processing state {state_usps}")
     fips = STATE_USPS_TO_FIPS[state_usps]
     out_block = PROCESSED_DIR_FCC_SPEEDS / f"fcc_fixed_speeds_{state_usps}_{fips}.parquet"
-    out_provider = PROCESSED_DIR_FCC_SPEEDS / f"fcc_fixed_speeds_providers_{state_usps}_{fips}.parquet"
+    out_provider_block = PROCESSED_DIR_FCC_SPEEDS / f"fcc_fixed_speeds_providers_block_{state_usps}_{fips}.parquet"
+    out_provider_h3 = PROCESSED_DIR_FCC_SPEEDS / f"fcc_fixed_speeds_providers_h3_{state_usps}_{fips}.parquet"
 
     block_done = out_block.exists() and not overwrite
-    provider_done = out_provider.exists() and not overwrite
+    provider_block_done = out_provider_block.exists() and not overwrite
+    provider_h3_done = out_provider_h3.exists() and not overwrite
 
-    if block_done and provider_done:
+    if block_done and provider_block_done and provider_h3_done:
         logger.info(f"Both processed files for {state_usps} already exist. Skipping.")
-        return out_block, out_provider
+        return out_block, out_provider_block, out_provider_h3
     
     zip_files = list(RAW_DIR_FCC_SPEEDS.glob(f"bdc_{fips}_*_fixed_broadband_*.zip"))
 
     if not zip_files:
         logger.warning(f"No zip files found for state {state_usps} (FIPS {fips}). Skipping.")
-        return None, None
+        return None, None, None
     
     logger.info(f"Found {len(zip_files)} zip files for state {state_usps}. Beginning processing.")
     block_dfs = []
-    provider_dfs = []
+    provider_block_dfs = []
+    provider_h3_dfs = []
 
     for zip_file in zip_files:
         try:
             csv_path = extract_zip_file(zip_file, EXTRACTED_DIR_FCC_SPEEDS / state_usps)
             if not block_done:
                 block_dfs.append(load_csv_for_block_df(csv_path))
-            if not provider_done:
-                provider_dfs.append(load_csv_for_providers_df(csv_path))
+            if not provider_block_done:
+                provider_block_dfs.append(load_csv_for_providers_df(csv_path))
+            if not provider_h3_done:
+                provider_h3_dfs.append(load_csv_for_providers_h3_df(csv_path))
             logger.info(f"Successfully extracted {zip_file} for state {state_usps}")
         except Exception as e:
             logger.error(f"Error processing {zip_file}: {e}")
     
     out_block_path = None
-    out_provider_path = None
+    out_provider_block_path = None
+    out_provider_h3_path = None
 
     # Block-level parquet
     if block_done:
@@ -278,19 +346,33 @@ def process_state(
         out_block_path = out_block
 
     # Provider-level parquet
-    if provider_done:
-        out_provider_path = out_provider
-    elif provider_dfs:
-        combined = pd.concat(provider_dfs, ignore_index=True)
+    if provider_block_done:
+        out_provider_block_path = out_provider_block
+    elif provider_block_dfs:
+        combined = pd.concat(provider_block_dfs, ignore_index=True)
         logger.info(f"Combined provider df for {state_usps}: {len(combined)} rows. Aggregating...")
-        provider_features = aggregate_to_provider_block(combined)
-        logger.info(f"Provider features for {state_usps}: {len(provider_features)} rows. Saving...")
-        out_provider.parent.mkdir(parents=True, exist_ok=True)
-        provider_features.to_parquet(out_provider, index=False)
-        logger.info(f"Saved provider-level data to {out_provider}")
-        out_provider_path = out_provider
+        provider_block_features = aggregate_to_provider_block(combined)
+        logger.info(f"Provider features for {state_usps}: {len(provider_block_features)} rows. Saving...")
+        out_provider_block.parent.mkdir(parents=True, exist_ok=True)
+        provider_block_features.to_parquet(out_provider_block, index=False)
+        logger.info(f"Saved provider-level data to {out_provider_block}")
+        out_provider_block_path = out_provider_block
+    
+    # Provider-H3-level parquet
+     # Provider-H3 parquet
+    if provider_h3_done:
+        out_provider_h3_path = out_provider_h3
+    elif provider_h3_dfs:
+        combined = pd.concat(provider_h3_dfs, ignore_index=True)
+        logger.info(f"Combined provider-H3 df for {state_usps}: {len(combined)} rows. Aggregating...")
+        provider_h3_features = aggregate_to_provider_h3(combined)
+        logger.info(f"Provider-H3 features for {state_usps}: {len(provider_h3_features)} rows. Saving...")
+        out_provider_h3.parent.mkdir(parents=True, exist_ok=True)
+        provider_h3_features.to_parquet(out_provider_h3, index=False)
+        logger.info(f"Saved provider-H3 data to {out_provider_h3}")
+        out_provider_h3_path = out_provider_h3
 
-    return out_block_path, out_provider_path
+    return out_block_path, out_provider_block_path, out_provider_h3_path
 
 # ── CLI entry point 
 
