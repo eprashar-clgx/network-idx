@@ -15,8 +15,8 @@ Output (per state, to data/features/fcc/speeds/tract/):
     - fcc_fixed_speeds_tract_{USPS}_{FIPS}.parquet
 
 Usage:
-    python -m network_idx.feature_engg.fcc_fixed_speeds_county --states AK AL
-    python -m network_idx.feature_engg.fcc_fixed_speeds_county --all
+    python -m network_idx.feature_engg.fcc_fixed_speeds_tract --states AK AL
+    python -m network_idx.feature_engg.fcc_fixed_speeds_tract --all
 """
 
 import argparse
@@ -109,7 +109,7 @@ def process_state(
         return out_path
 
     block_speeds_path = PROCESSED_DIR_FCC_SPEEDS / f"fcc_fixed_speeds_{state_usps}_{fips}.parquet"
-    block_provider_path = PROCESSED_DIR_FCC_SPEEDS / f"fcc_fixed_speeds_providers_{state_usps}_{fips}.parquet"
+    block_provider_path = PROCESSED_DIR_FCC_SPEEDS / f"fcc_fixed_speeds_providers_block_{state_usps}_{fips}.parquet"
 
     if not block_speeds_path.exists() or not block_provider_path.exists():
         logger.warning(f"Missing input parquets for {state_usps}. Skipping.")
@@ -134,6 +134,12 @@ def process_state(
     for col in FCC_FIXED_SPEED_TRACT_OUTPUTS:
         if col not in tract_df.columns:
             tract_df[col] = pd.NA
+
+     # Cast provider counts to nullable integer to avoid float/int inconsistency across states
+    for tech in TECHS:
+        col = f"{tech}_provider_count"
+        if col in tract_df.columns:
+            tract_df[col] = tract_df[col].astype("Int64")
 
     tract_df = tract_df[[c for c in FCC_FIXED_SPEED_TRACT_OUTPUTS if c in tract_df.columns]]
 
