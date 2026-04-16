@@ -73,6 +73,23 @@ GCS_PREFIX_RAW_FCC_BROADBAND_COVERAGE = "network_idx/raw/fcc/broadband_coverage"
 GCS_PREFIX_EXTRACTED_FCC_BROADBAND_COVERAGE = "network_idx/extracted/fcc/broadband_coverage"
 GCS_PREFIX_PROCESSED_FCC_BROADBAND_COVERAGE = "network_idx/processed/fcc/broadband_coverage"
 
+# BigQuery — FCC Speeds
+BQ_DATASET_FCC_SPEEDS = os.getenv("BQ_DATASET_FCC_SPEEDS", "teu_telecom")
+BQ_TABLE_FCC_SPEEDS_BLOCK = "fcc_fixed_speeds_block"
+BQ_TABLE_FCC_SPEEDS_PROVIDERS_BLOCK = "fcc_fixed_speeds_providers_block"
+BQ_TABLE_FCC_SPEEDS_PROVIDERS_H3 = "fcc_fixed_speeds_providers_h3"
+
+# BigQuery — FCC Coverage
+BQ_DATASET_FCC_COVERAGE = os.getenv("BQ_DATASET_FCC_COVERAGE", "teu_telecom")
+BQ_TABLE_FCC_COVERAGE_BLOCK = "fcc_coverage_block"
+BQ_TABLE_FCC_COVERAGE_COUNTY_RESIDUALS = "fcc_coverage_county_residuals"
+
+# BigQuery - Features
+BQ_DATASET_FEATURES = os.getenv("BQ_DATASET_FEATURES", "teu_features")
+BQ_TABLE_FCC_COVERAGE_FEATURES_TRACT = "fcc_fixed_coverage_ct"
+BQ_TABLE_FCC_SPEEDS_FEATURES_TRACT = "fcc_fixed_speeds_ct"
+
+
 # GCS Upload settings
 UPLOAD_OVERWRITE = False # if False, skip blobs that already exist
 UPLOAD_CHUNK_MB = 8 # chunk size for multipart uploads (in MB)
