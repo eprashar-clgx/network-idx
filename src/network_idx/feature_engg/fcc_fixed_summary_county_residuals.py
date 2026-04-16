@@ -195,6 +195,11 @@ def compute_residuals(
         rows.append(rec)
 
     result = pd.DataFrame(rows)
+    # Ensure consistent float dtype for coverage percentage columns across all states
+    for col in PCT_COLS:
+        if col in result.columns:
+            result[col] = result[col].astype("Float64")
+
     return result[[c for c in FCC_COVERAGE_COUNTY_RESIDUAL_OUTPUTS if c in result.columns]]
 
 
