@@ -89,6 +89,12 @@ BQ_DATASET_FEATURES = os.getenv("BQ_DATASET_FEATURES", "teu_features")
 BQ_TABLE_FCC_COVERAGE_FEATURES_TRACT = "fcc_fixed_coverage_ct"
 BQ_TABLE_FCC_SPEEDS_FEATURES_TRACT = "fcc_fixed_speeds_ct"
 
+# BigQuery — Demographics / Population
+BQ_TABLE_DEMO_POP_TRACT = "demo_pop_ct"
+BQ_SOURCE_NEIGHBORHOOD_SCOUT_CT = os.getenv(
+    "BQ_SOURCE_NEIGHBORHOOD_SCOUT_CT",
+    ""
+)
 
 # GCS Upload settings
 UPLOAD_OVERWRITE = False # if False, skip blobs that already exist
