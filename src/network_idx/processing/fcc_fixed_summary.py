@@ -19,8 +19,7 @@ Common filters/features:
    - biz_res == "R"
    - technology in ["Copper", "Cable", "Fiber"]
    - speed_100_20 as-is
-   - less_than_100_20 = MAX(speed_02_02, speed_10_1, speed_25_3)
-   - more_than_100_20 = MAX(speed_250_25, speed_1000_100)
+   - other speeds as MECE buckets (e.g. speed_10_1_only = at least 10/1 Mbps but not 25/3 Mbps)
 """
 
 import argparse
@@ -140,20 +139,34 @@ def load_csv_to_df(
 # Feature engineering
 def create_coverage_features(df:pd.DataFrame) -> pd.DataFrame:
     """
-    For each geography + technology row, compute:
-      speed_100_20        — taken as-is
-      less_than_100_20    — MAX(speed_02_02, speed_10_1, speed_25_3)
-      more_than_100_20    — MAX(speed_250_25, speed_1000_100)
+    For each geography + technology row, compute MECE buckets:
+      - speed_02_02_only: at least 0.2/0.2 Mbps but not 10/1 Mbps
+      - speed_10_1_only: at least 10/1 Mbps but not 25/3 Mbps
+      - speed_25_3_only: at least 25/3 Mbps but not 100/20 Mbps
+      - speed_100_20_only: at least 100/20 Mbps but not 250/25 Mbps
+      - speed_250_25_only: at least 250/25 Mbps but not 1000/100 Mbps
+      - speed_1000_100_only: at least 1000/100 Mbps
     Then pivot so each technology becomes its own set of columns.
     """
-    # Create new features for less_than_100_20 and more_than_100_20
-    df["less_than_100_20"] = df[["speed_02_02", "speed_10_1", "speed_25_3"]].max(axis=1)
-    df["more_than_100_20"] = df[["speed_250_25", "speed_1000_100"]].max(axis=1)
+    df = df.copy()
+    df["speed_02_02_only"] = df["speed_02_02"] - df["speed_10_1"]
+    df["speed_10_1_only"] = df["speed_10_1"] - df["speed_25_3"]
+    df["speed_25_3_only"] = df["speed_25_3"] - df["speed_100_20"]
+    df["speed_100_20_only"] = df["speed_100_20"] - df["speed_250_25"]
+    df["speed_250_25_only"] = df["speed_250_25"] - df["speed_1000_100"]
+    df["speed_1000_100_only"] = df["speed_1000_100"]
 
     df["technology_lbl"] = df["technology"].str.lower()
 
     INDEX_COLS = ["geography_id", "geography_desc", "geography_desc_full", "total_units"]
-    METRIC_COLS = ["speed_100_20", "less_than_100_20", "more_than_100_20"]
+    METRIC_COLS = [
+        "speed_02_02_only",
+        "speed_10_1_only",
+        "speed_25_3_only",
+        "speed_100_20_only",
+        "speed_250_25_only",
+        "speed_1000_100_only"
+    ]
 
     pivoted = df.pivot_table(
         index=INDEX_COLS,
@@ -162,7 +175,7 @@ def create_coverage_features(df:pd.DataFrame) -> pd.DataFrame:
         aggfunc="first",
     )
 
-    # Flatten MultiIndex columns: e.g. ("speed_100_20", "copper") -> "copper_speed_100_20"
+    # Flatten MultiIndex columns: e.g. ("speed_02_02_only", "copper") -> "copper_speed_02_02_only"
     pivoted.columns = [f"{tech}_{metric}" for metric, tech in pivoted.columns]
     pivoted = pivoted.reset_index()
 
