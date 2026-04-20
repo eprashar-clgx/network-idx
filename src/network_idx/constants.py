@@ -382,7 +382,14 @@ CENSUS_BAF_OUTPUTS = [
     "place_geoid",
 ]
 
-FCC_COVERAGE_TIER_METRICS = ["speed_100_20", "less_than_100_20", "more_than_100_20"]
+FCC_COVERAGE_TIER_METRICS = [
+        "speed_02_02_only",
+        "speed_10_1_only",
+        "speed_25_3_only",
+        "speed_100_20_only",
+        "speed_250_25_only",
+        "speed_1000_100_only"
+        ]
 
 FCC_COVERAGE_COUNTY_RESIDUAL_OUTPUTS = [
     "county_geoid",
