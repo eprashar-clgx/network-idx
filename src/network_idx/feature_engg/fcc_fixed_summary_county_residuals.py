@@ -58,7 +58,14 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 TECHS = ["copper", "cable", "fiber"]
-TIER_METRICS = ["speed_100_20", "less_than_100_20", "more_than_100_20"]
+TIER_METRICS = [
+        "speed_02_02_only",
+        "speed_10_1_only",
+        "speed_25_3_only",
+        "speed_100_20_only",
+        "speed_250_25_only",
+        "speed_1000_100_only"
+        ]
 PCT_COLS = [f"{tech}_{metric}" for tech in TECHS for metric in TIER_METRICS]
 
 
@@ -170,7 +177,10 @@ def compute_residuals(
             if residual_units == 0:
                 rec[col] = None
             else:
-                county_abs = county_units * county_row.get(col, 0)
+                county_val = county_row.get(col, 0)
+                if pd.isna(county_val):
+                    county_val=0
+                county_abs = county_units * county_val
 
                 if len(places_with_share) and col in place_indexed.columns:
                     # Σ (place_total_units × place_pct × share)

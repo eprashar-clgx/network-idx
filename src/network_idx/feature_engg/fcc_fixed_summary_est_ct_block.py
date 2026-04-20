@@ -33,7 +33,7 @@ Usage:
 import argparse
 import logging
 from pathlib import Path
-
+import numpy as np
 import pandas as pd
 
 from network_idx.constants import (
@@ -105,6 +105,13 @@ def estimate_block_coverage(
     For residual blocks: estimated_units = (block_hu / Σ block_hu in county residual) × residual_units
     Percentages come directly from the place or county residual source.
     """
+    # Normalize nullable Float64 → float64 (pd.NA → NaN) so .map() / .loc assignments work
+    for col in PCT_COLS:
+        if col in place_df.columns:
+            place_df[col] = place_df[col].astype(float)
+        if col in residuals_df.columns:
+            residuals_df[col] = residuals_df[col].astype(float)
+    
     blocks = baf_df.copy()
 
     # Join address counts
@@ -248,6 +255,10 @@ def process_state(
         logger.info(f"{state_usps}: estimating block-level coverage ({len(baf_df):,} blocks)")
         block_df = estimate_block_coverage(place_df, residuals_df, baf_df, acl_df, state_usps)
 
+        # Convert all nullable Float64 columns to float64
+        block_df = block_df.replace({pd.NA: np.nan})
+        block_df = block_df.astype({col: "float64" for col in block_df.select_dtypes("Float64").columns})
+
         block_out.parent.mkdir(parents=True, exist_ok=True)
         block_df.to_parquet(block_out, index=False)
         logger.info(f"Saved {block_out.name}  ({len(block_df):,} blocks)")
@@ -261,7 +272,9 @@ def process_state(
     if compute_tract and not tract_done:
         logger.info(f"{state_usps}: aggregating to tract level")
         tract_df = aggregate_blocks_to_tract(block_df)
-
+        # Convert nullable floats to float64 before saving
+        tract_df = tract_df.replace({pd.NA: np.nan})
+        tract_df = tract_df.astype({col: "float64" for col in tract_df.select_dtypes("Float64").columns})
         tract_out.parent.mkdir(parents=True, exist_ok=True)
         tract_df.to_parquet(tract_out, index=False)
         logger.info(f"Saved {tract_out.name}  ({len(tract_df):,} tracts)")
