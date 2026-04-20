@@ -88,6 +88,8 @@ BQ_TABLE_FCC_COVERAGE_COUNTY_RESIDUALS = "fcc_coverage_county_residuals"
 BQ_DATASET_FEATURES = os.getenv("BQ_DATASET_FEATURES", "teu_features")
 BQ_TABLE_FCC_COVERAGE_FEATURES_TRACT = "fcc_fixed_coverage_ct"
 BQ_TABLE_FCC_SPEEDS_FEATURES_TRACT = "fcc_fixed_speeds_ct"
+BQ_TABLE_FCC_COVERAGE_FEATURES_TRACT_BUCKETED = "fcc_fixed_coverage_ct_bucketed_speeds"
+
 
 # BigQuery — Demographics / Population
 BQ_TABLE_DEMO_POP_TRACT = "demo_pop_ct"

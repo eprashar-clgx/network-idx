@@ -420,3 +420,17 @@ FCC_COVERAGE_TRACT_OUTPUTS = [
     "estimated_census_housing_units",
     "estimated_fcc_units",
 ] + [f"{tech.lower()}_{metric}" for tech in FCC_FIXED_COVERAGE_TECHNOLOGIES for metric in FCC_COVERAGE_TIER_METRICS]
+
+FCC_COVERAGE_TRACT_BUCKETED_METRICS = [
+    "speed_less_than_100_20",
+    "speed_100_20_only",
+    "speed_more_than_100_20",
+]
+
+FCC_COVERAGE_TRACT_BUCKETED_OUTPUTS = [
+    "tract_geoid",
+    "state_fips",
+    "state_usps",
+    "estimated_census_housing_units",
+    "estimated_fcc_units",
+] + [f"{tech.lower()}_{metric}" for tech in FCC_FIXED_COVERAGE_TECHNOLOGIES for metric in FCC_COVERAGE_TRACT_BUCKETED_METRICS]
