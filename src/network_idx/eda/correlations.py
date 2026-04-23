@@ -95,8 +95,18 @@ def fetch_data_from_bq() -> pd.DataFrame:
 
     table_id = f"{GCS_PROJECT_ID}.{BQ_DATASET_FEATURES}.{BQ_TABLE_ALL_FEATURES_TRACT}"
     client = bigquery.Client(project=GCS_PROJECT_ID)
-    return client.query(f"SELECT * FROM `{table_id}`").to_dataframe()
-
+    # Exclude geometry and for now, Rextag distance columns for correlation analysis
+    query = f"""
+        SELECT * EXCEPT(
+            mean_dist_nearest_fiber_m,
+            median_dist_nearest_fiber_m,
+            mean_radius_fiber_count,
+            median_radius_fiber_count,
+            geometry
+        )
+        FROM `{table_id}`
+    """
+    return client.query(query).to_arrow().to_pandas()
     
 def _numeric_cols(df: pd.DataFrame) -> list:
     """Return list of numeric columns for correlation analysis."""
