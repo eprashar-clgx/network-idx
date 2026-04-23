@@ -86,6 +86,7 @@ BQ_TABLE_FCC_COVERAGE_COUNTY_RESIDUALS = "fcc_coverage_county_residuals"
 
 # BigQuery - Features
 BQ_DATASET_FEATURES = os.getenv("BQ_DATASET_FEATURES", "teu_features")
+BQ_TABLE_ALL_FEATURES_TRACT = "all_features_tract"
 BQ_TABLE_FCC_COVERAGE_FEATURES_TRACT = "fcc_fixed_coverage_ct"
 BQ_TABLE_FCC_SPEEDS_FEATURES_TRACT = "fcc_fixed_speeds_ct"
 BQ_TABLE_FCC_COVERAGE_FEATURES_TRACT_BUCKETED = "fcc_fixed_coverage_ct_bucketed_speeds"
@@ -97,6 +98,12 @@ BQ_SOURCE_NEIGHBORHOOD_SCOUT_CT = os.getenv(
     "BQ_SOURCE_NEIGHBORHOOD_SCOUT_CT",
     ""
 )
+
+# Bigquery - other datasets / tables
+BQ_TABLE_LOC_PARCELS_GROWTH_CT = "loc_parcels_growth_ct"
+BQ_TABLE_REXTAG_DISTANCE_CT = "rextag_distance_ct"
+BQ_DATASET_BOUNDARY = "boundary"
+BQ_TABLE_CENSUS_TRACT_BOUNDARY = "census_tract_optimized"
 
 # GCS Upload settings
 UPLOAD_OVERWRITE = False # if False, skip blobs that already exist
