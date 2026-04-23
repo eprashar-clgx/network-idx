@@ -37,4 +37,5 @@ LEFT JOIN `{demo_pop_table}` b ON a.tract_geoid = b.tract_geoid
 LEFT JOIN `{speeds_table}` c ON a.tract_geoid = c.tract_geoid
 LEFT JOIN `{loc_parcels_growth_table}` d ON a.tract_geoid = d.tract_id
 LEFT JOIN `{rextag_distance_table}` e ON a.tract_geoid = e.tract_id
-LEFT JOIN `{census_tract_boundary_table}` f ON a.tract_geoid = f.GEOID;
+LEFT JOIN `{ct_crosswalk_table}` x ON a.tract_geoid = x.GEOID20
+LEFT JOIN `{census_tract_boundary_table}` f ON COALESCE(x.GEOID, a.tract_geoid) = f.GEOID;

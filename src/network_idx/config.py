@@ -105,6 +105,10 @@ BQ_TABLE_REXTAG_DISTANCE_CT = "rextag_distance_ct"
 BQ_DATASET_BOUNDARY = "boundary"
 BQ_TABLE_CENSUS_TRACT_BOUNDARY = "census_tract_optimized"
 
+# Connecticut tract crosswalk (2020 GEOID → current GEOID)
+GCS_CT_CROSSWALK_PATH = "gs://geospatial-projects/location_inc/spatial/us/tiger/2022/connecticut_ct_crosswalk.csv"
+BQ_TABLE_CT_TRACT_CROSSWALK = "ct_tract_crosswalk_2020"
+
 # GCS Upload settings
 UPLOAD_OVERWRITE = False # if False, skip blobs that already exist
 UPLOAD_CHUNK_MB = 8 # chunk size for multipart uploads (in MB)
