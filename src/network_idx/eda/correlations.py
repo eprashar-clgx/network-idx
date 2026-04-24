@@ -242,7 +242,7 @@ def plot_correlation_heatmap(
     figsize: tuple[int, int] = (16, 14),
     annot: bool = True,
     fmt: str = ".2f",
-    cmap: str = "RdBu_r",
+    cmap: str = "RdYlGn",
     title: str | None = None,
 ) -> plt.Figure:
     """
