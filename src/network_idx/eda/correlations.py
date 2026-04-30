@@ -98,10 +98,6 @@ def fetch_data_from_bq() -> pd.DataFrame:
     # Exclude geometry and for now, Rextag distance columns for correlation analysis
     query = f"""
         SELECT * EXCEPT(
-            mean_dist_nearest_fiber_m,
-            median_dist_nearest_fiber_m,
-            mean_radius_fiber_count,
-            median_radius_fiber_count,
             geometry
         )
         FROM `{table_id}`

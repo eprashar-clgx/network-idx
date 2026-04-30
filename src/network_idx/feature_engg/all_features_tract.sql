@@ -30,7 +30,8 @@ SELECT
     c.fiber_max_download_speed,
     c.fiber_max_upload_speed,
     d.* EXCEPT(tract_id),
-    e.*,
+    e.mean_dist_nearest_fiber_m,
+    e.median_dist_nearest_fiber_m,
     f.geometry
 FROM `{coverage_bucketed_table}` a
 LEFT JOIN `{demo_pop_table}` b ON a.tract_geoid = b.tract_geoid
