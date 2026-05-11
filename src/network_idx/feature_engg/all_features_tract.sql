@@ -3,7 +3,9 @@ CLUSTER BY tract_geoid AS
 SELECT 
 	a.tract_geoid,
     b.pop_ch_1yr,
+    b.pop_ch_avg,
     b.pop_pctch_1yr,
+    b.pop_pctch_avg,
     a.estimated_census_housing_units,
     a.estimated_fcc_units,
     a.copper_speed_less_than_100_20,
