@@ -112,6 +112,3 @@ BQ_TABLE_CT_TRACT_CROSSWALK = "ct_tract_crosswalk_2020"
 # GCS Upload settings
 UPLOAD_OVERWRITE = False # if False, skip blobs that already exist
 UPLOAD_CHUNK_MB = 8 # chunk size for multipart uploads (in MB)
-
-
-
