@@ -112,6 +112,8 @@ BQ_TABLE_CT_TRACT_CROSSWALK = "ct_tract_crosswalk_2020"
 # BigQuery - Analysis output tables
 BQ_DATASET_ANALYTICS = "teu_analytics"
 BQ_FEATURES_ENGG_TRACT = "fcc_feature_engg_tract"
+BQ_FEATURES_CORRELATIONS_TRACT = "post_corr_all_features_for_clustering_tract"
+BQ_CLUSTERING_TRACTS = "results_clustering_k8_tract"
 
 # GCS Upload settings
 UPLOAD_OVERWRITE = False # if False, skip blobs that already exist
