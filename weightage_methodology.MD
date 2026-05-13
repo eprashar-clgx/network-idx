@@ -106,3 +106,15 @@ $$\text{idx\_overall} = \text{rescale}_{0-100}\left(\sum_{i=1}^{13} w_i \times v
 |--------|-----------|------|------|
 | **Min-max** | $(v - \min) / (\max - \min)$ | Preserves relative distances between values; interpretable | Sensitive to outliers; skewed distributions create uneven spread (hotspot distance: 59% variance) |
 | **Rank (percentile)** | Each value → its percentile rank [0, 1] | Robust to outliers and skew; uniform variance across features | Destroys magnitude information; a tract at P90 vs P95 looks the same distance apart as P50 vs P55 |
+
+## Inverted Features (lower raw value = higher index score)
+- `median_dist_nearest_hotspot` — closer to growth hotspot = better
+- `median_dist_nearest_fiber_m` — closer to existing fiber = better
+- `cable_penetration` — less cable = more greenfield opportunity
+- `fiber_speed_top_tier` — lower existing fiber speed = more upgrade opportunity
+- `provider_competitive_landscape_ord` — fewer providers = less saturated market
+
+## Open Decisions
+
+- [ ] Consider capping/winsorizing hotspot distance before scaling as alternative to rank
+- [ ] Retrain RF with max_depth=15 or switch to LightGBM for faster SHAP iteration
