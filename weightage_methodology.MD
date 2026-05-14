@@ -37,7 +37,7 @@ $$w_i^{\text{growth}} = \frac{\text{mean}(|\text{SHAP}_i|)}{\sum_{j \in \text{gr
 
 **Steps:**
 1. Scale each feature's raw values to [0, 1] (via min-max or rank)
-2. Invert distance features (1 - scaled) so closer = higher
+2. Invert features where required (see section below on all features that are inverted)
 3. Multiply each scaled value by its bucket-normalized weight
 4. Sum across features in the bucket → raw score in [0, 1]
 5. Min-max rescale to [0, 100]
