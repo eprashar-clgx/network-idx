@@ -8,6 +8,7 @@ __pycache__/
 .env
 /data
 /notebooks/data/
+/notebooks/temp.*
 
 # Jupyter Notebooks
 .ipynb_checkpoints/
