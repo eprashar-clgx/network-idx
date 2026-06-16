@@ -83,9 +83,51 @@ We apply `log(1 + count)` to:
 - Compress the right tail so the variogram reflects *typical* spatial structure
 - Handle zeros gracefully (log(1+0) = 0)
 - Make the semivariance values more interpretable
----
 
-## 5. Results: Pre-Early Development Parcels
+
+## 5. Sampling Strategy
+
+### County Selection
+
+Twenty counties were selected across four density tiers (5 per tier), chosen to represent distinct growth patterns while minimizing within-tier heterogeneity:
+
+| Tier | Counties | Selection Criteria |
+|------|----------|-------------------|
+| **Urban** | Philadelphia PA, Washington DC, Cook IL, Dallas TX, Los Angeles CA | Uniformly dense; growth = infill/redevelopment; no suburban fringe |
+| **Suburban** | Harris TX, Clark NV, Wake NC, Madison AL, Sacramento CA | Active subdivision sprawl at metro edges; classic greenfield expansion |
+| **Exurban** | Pinal AZ, Williamson TX, Weld CO, Montgomery TX, Horry SC | Leapfrog development; farmland/ranch converting to master-planned communities |
+| **Rural** | Gallatin MT, Yellowstone MT, Ward ND, Laramie WY, Lincoln SD | Sparse growth in large-parcel agricultural/ranch counties; oil/defense/amenity-driven |
+
+Counties were deliberately chosen from different states and geographies to avoid conflating regional trends with density-tier effects.
+
+### Parcel Sampling (5,000 per county)
+
+From each county, 5,000 parcels are sampled using deterministic pseudo-random selection:
+
+```sql
+ROW_NUMBER() OVER (
+    PARTITION BY fips 
+    ORDER BY FARM_FINGERPRINT(CAST(parcel_shape_id AS STRING))
+) AS rn
+WHERE rn <= 5000
+```
+
+- **`FARM_FINGERPRINT`** produces a deterministic hash of the parcel ID — ensuring reproducibility across runs without requiring a stored random seed.
+- **5,000 per county / 25,000 per tier** balances computational tractability with statistical power. Each tier yields ~312M potential parcel pairs (25,000 × 24,999 / 2), though only the upper triangle is computed.
+
+- **No spatial bias:** Because the hash is unrelated to location, the sample is spatially uniform within each county (unlike, e.g., sampling the first N rows which might cluster geographically).
+
+### Sub-sampling for Variogram Computation
+
+Within each density tier, a further random sample of **5,000 parcels** is drawn (pooled across the tier's 5 counties) before computing the empirical variogram:
+
+```python
+sample = subset.sample(n=min(5000, len(subset)), random_state=42)
+```
+
+This yields ~12.5M unique pairs per tier — sufficient for stable bin estimates (typically 10,000–500,000 pairs per lag bin) while keeping computation under ~30 seconds per tier. The random_state=42 ensures reproducibility.
+
+## 6. Results: Pre-Early Development Parcels
 
 ### Fitted Semivariograms by Density Tier
 
@@ -112,7 +154,7 @@ We apply `log(1 + count)` to:
 A radius of **0.5 miles** would capture the majority of the spatial signal across all density contexts while remaining computationally tractable. The current 0.25-mile radius captures approximately half of the available spatial correlation structure.
 
 
-## 6. Limitations & Assumptions
+## 7. Limitations & Assumptions
 
 ### Isotropy Assumption
 
