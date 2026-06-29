@@ -434,3 +434,79 @@ FCC_COVERAGE_TRACT_BUCKETED_OUTPUTS = [
     "estimated_census_housing_units",
     "estimated_fcc_units",
 ] + [f"{tech.lower()}_{metric}" for tech in FCC_FIXED_COVERAGE_TECHNOLOGIES for metric in FCC_COVERAGE_TRACT_BUCKETED_METRICS]
+
+
+# ── Parcel-level scoring: feature groups & weighting metadata ─────────────────
+# Single source of truth for the 13 model features, bucket assignment, inversion
+# direction, the provider-landscape ordinal map, and the v1 run identity.
+
+GROWTH_FEATURES = [
+    "median_landuse_change_qtr_mi_cnt",
+    "median_pre_early_dev_qtr_mi_cnt",
+    "median_bldr_dev_qtr_mi_cnt",
+    "median_new_permit_qtr_mi_cnt",
+    "median_dist_nearest_hotspot",
+]
+
+TELECOM_FEATURES = [
+    "cable_penetration",
+    "fiber_opportunity_gap",
+    "fiber_speed_top_tier",
+    "median_dist_nearest_fiber_m",
+    "provider_competitive_landscape_ord",
+]
+
+DEMO_FEATURES = [
+    "pop_ch_avg",
+    "pop_pctch_avg",
+    "estimated_census_housing_units",
+]
+
+# Canonical column order for the weight vector (Growth -> FCC -> Demo).
+ALL_SCORING_FEATURES = GROWTH_FEATURES + FCC_FEATURES + DEMO_FEATURES
+
+SCORING_BUCKETS = {
+    "growth": GROWTH_FEATURES,
+    "telecom": TELECOM_FEATURES,
+    "demo": DEMO_FEATURES,
+}
+
+# v1 group weights (raw-SHAP group shares). build_weights.py should recompute from
+# the model and assert these match before writing the run.
+SCORING_BUCKET_WEIGHTS = {
+    "growth": 0.40,
+    "telecom": 0.44,
+    "demo": 0.16,
+}
+
+# Features where a LOWER raw value means a HIGHER opportunity score (invert on scaling).
+INVERTED_FEATURES = {
+    "median_dist_nearest_hotspot",
+    "median_dist_nearest_fiber_m",
+    "cable_penetration",
+    "fiber_speed_top_tier",
+    "provider_competitive_landscape_ord",
+}
+
+# provider_competitive_landscape text label -> ordinal (kept alongside the label).
+PROVIDER_LANDSCAPE_ORDER = {
+    "no_providers": 0,
+    "greenfield": 1,
+    "cable_but_no_fiber": 2,
+    "fiber_entry": 3,
+    "fiber_duopoly": 4,
+    "fiber_competitive": 5,
+    "fiber_saturated": 6,
+}
+
+# FCC (Calling it Telecom) block-feature NA fills (apply to BOTH NaN and +/-inf — see QA C3/F1).
+TELECOM_FEATURE_NA_FILL = {
+    "cable_penetration": 0.0,
+    "fiber_opportunity_gap": 1.0,
+}
+
+# v1 run identity.
+SCORING_RUN_MODEL = "lightgbm"
+SCORING_RUN_K = 8
+SCORING_RUN_VERSION = "v1"
+SCORING_RUN_ID = f"{SCORING_RUN_MODEL}_k{SCORING_RUN_K}_{SCORING_RUN_VERSION}"

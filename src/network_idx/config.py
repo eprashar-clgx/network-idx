@@ -129,7 +129,6 @@ BQ_TABLE_PARCEL_FEATURES = "parcel_features"               # final joined featur
 
 # teu_analytics — weights & scaling
 BQ_TABLE_FEATURE_WEIGHTS = "feature_weights"               # slim: 1 row per feature per run
-BQ_TABLE_FEATURES_WEIGHTS = "features_with_weights"        # features + weights (reference)
 BQ_TABLE_SCALING_PARAMS = "scaling_params"                 # frozen country-wide scaling stats per run
 
 # teu_outputs — final scores
