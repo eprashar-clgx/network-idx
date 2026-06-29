@@ -111,10 +111,29 @@ BQ_TABLE_CT_TRACT_CROSSWALK = "ct_tract_crosswalk_2020"
 
 # BigQuery - Analysis output tables
 BQ_DATASET_ANALYTICS = "teu_analytics"
-BQ_FEATURES_ENGG_TRACT = "fcc_feature_engg_tract"
+BQ_FEATURES_ENGG_TRACT = "all_feature_engg_tract"
 BQ_FEATURES_CORRELATIONS_TRACT = "post_corr_all_features_for_clustering_tract"
 BQ_CLUSTERING_TRACTS = "results_clustering_k8_tract"
 
 # GCS Upload settings
 UPLOAD_OVERWRITE = False # if False, skip blobs that already exist
 UPLOAD_CHUNK_MB = 8 # chunk size for multipart uploads (in MB)
+
+# ── Parcel-level scoring pipeline ─────────────────────────────────────────────
+# teu_features + teu_analytics already defined above; teu_outputs is new.
+BQ_DATASET_OUTPUTS = os.getenv("BQ_DATASET_OUTPUTS", "teu_outputs")
+
+# teu_features — feature tables
+BQ_TABLE_TELECOM_FEATURES_BLOCK = "telecom_features_block"  # derived telecom features @ block
+BQ_TABLE_PARCEL_FEATURES = "parcel_features"               # final joined feature list @ parcel
+
+# teu_analytics — weights & scaling
+BQ_TABLE_FEATURE_WEIGHTS = "feature_weights"               # slim: 1 row per feature per run
+BQ_TABLE_FEATURES_WEIGHTS = "features_with_weights"        # features + weights (reference)
+BQ_TABLE_SCALING_PARAMS = "scaling_params"                 # frozen country-wide scaling stats per run
+
+# teu_outputs — final scores
+BQ_TABLE_PARCEL_SCORES = "parcel_scores"                   # scaled features + parcel index (run_id)
+
+# Source parcel table = join spine (growth features + block_geoid). Confirm exact name.
+BQ_TABLE_PARCEL_GROWTH = os.getenv("BQ_TABLE_PARCEL_GROWTH", "loc_parcels_growth_parcel")
