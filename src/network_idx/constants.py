@@ -474,9 +474,9 @@ SCORING_BUCKETS = {
 # v1 group weights (raw-SHAP group shares). build_weights.py should recompute from
 # the model and assert these match before writing the run.
 SCORING_BUCKET_WEIGHTS = {
-    "growth": 0.40,
-    "telecom": 0.44,
-    "demo": 0.16,
+    "growth": 0.169,
+    "telecom": 0.591,
+    "demo": 0.240,
 }
 
 # Features where a LOWER raw value means a HIGHER opportunity score (invert on scaling).
