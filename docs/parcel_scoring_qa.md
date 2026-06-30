@@ -176,6 +176,15 @@ With `_ord` inverted, ordinal `0 = no_providers` scores as **max opportunity** �
 to confirm empty/degenerate blocks aren't inflating the FCC sub-index (cross-check against
 `census_housing_units = 0` and `estimated_fcc_units = 0`).
 
+### D4 / F6 — Delivery distances are in METERS, not miles
+`fiber_idx_v1_parcel.dist_nearest_hotspot` and `dist_nearest_fiber` are emitted as the
+raw source values, which are in **meters** (`dist_to_nearest_hotspot_m`,
+`dist_to_nearest_fiber_m`). The data-dictionary wording ("Distance (in miles)") is
+aspirational — no unit conversion is applied in the pipeline. Either (a) update the
+customer definition to say "meters", or (b) add a `/ 1609.344` conversion in
+`build_delivery_query` before publishing externally. Scaling/scoring are unaffected
+either way (min-max is unit-invariant).
+
 ---
 
 ## Pre-flight checklist

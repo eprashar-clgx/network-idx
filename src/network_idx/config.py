@@ -138,3 +138,5 @@ BQ_TABLE_SCALING_PARAMS = "scaling_params"                 # frozen country-wide
 
 # teu_outputs — final scores
 BQ_TABLE_PARCEL_SCORES = "parcel_scores"                   # scaled features + parcel index (run_id)
+
+BQ_TABLE_FIBER_IDX_PARCEL = "fiber_idx_v1_parcel"   # teu_outputs — customer delivery table

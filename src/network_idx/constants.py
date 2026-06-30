@@ -550,3 +550,32 @@ MODEL_TO_SCORING_FEATURE = {
     "estimated_census_housing_units": "census_housing_units",
     # telecom + pop_ch/pctch names already match — identity
 }
+
+# ── Delivery table (fiber_idx_v1_parcel) name mapping ─────────────────────────
+# Canonical pipeline feature -> customer-facing delivery column name.
+DELIVERY_FEATURE_NAMES = {
+    "pop_ch_avg": "pop_ch_avg",
+    "pop_pctch_avg": "pop_pctch_avg",
+    "census_housing_units": "census_housing_units",
+    "pre_early_dev_qtr_mi_cnt": "pre_early_dev_qtr_mi_cnt",
+    "bldr_dev_qtr_mi_cnt": "bldr_dev_qtr_mi_cnt",
+    "landuse_change_qtr_mi_cnt": "landuse_change_qtr_mi_cnt",
+    "new_permit_qtr_mi_cnt": "new_permit_qtr_mi_cnt",
+    "dist_to_nearest_hotspot_m": "dist_nearest_hotspot",   # raw kept in METERS (see QA)
+    "dist_to_nearest_fiber_m": "dist_nearest_fiber",       # raw kept in METERS (see QA)
+    "provider_competitive_landscape_ord": "provider_competitive_landscape",  # emitted as STRING
+    "cable_penetration": "cable_penetration",
+    "fiber_opportunity_gap": "fiber_opportunity_gap",
+    "fiber_speed_top_tier": "fiber_speed_top_tier",
+}
+
+# Sub-index / overall -> delivery names.
+DELIVERY_INDEX_NAMES = {
+    "demo": "demographic_index",
+    "growth": "growth_index",
+    "telecom": "telecom_index",
+    "overall": "fiber_potential_index",
+}
+
+# ord -> text label (inverse of PROVIDER_LANDSCAPE_ORDER) for the STRING column.
+PROVIDER_LANDSCAPE_LABEL = {v: k for k, v in PROVIDER_LANDSCAPE_ORDER.items()}
