@@ -123,6 +123,11 @@ UPLOAD_CHUNK_MB = 8 # chunk size for multipart uploads (in MB)
 # teu_features + teu_analytics already defined above; teu_outputs is new.
 BQ_DATASET_OUTPUTS = os.getenv("BQ_DATASET_OUTPUTS", "teu_outputs")
 
+# teu_features — source parcel tables (join spine + distances)
+BQ_TABLE_PARCEL_GROWTH = os.getenv("BQ_TABLE_PARCEL_GROWTH", "loc_growth_cnts_parcel")
+BQ_TABLE_REXTAG_DISTANCE_PARCEL = "rextag_distance_parcel"      # dist_to_nearest_fiber_m
+BQ_TABLE_HOTSPOT_DISTANCE_PARCEL = "loc_growth_distance_parcel"  # dist_to_nearest_hotspot_m
+
 # teu_features — feature tables
 BQ_TABLE_TELECOM_FEATURES_BLOCK = "telecom_features_block"  # derived telecom features @ block
 BQ_TABLE_PARCEL_FEATURES = "parcel_features"               # final joined feature list @ parcel
@@ -133,6 +138,3 @@ BQ_TABLE_SCALING_PARAMS = "scaling_params"                 # frozen country-wide
 
 # teu_outputs — final scores
 BQ_TABLE_PARCEL_SCORES = "parcel_scores"                   # scaled features + parcel index (run_id)
-
-# Source parcel table = join spine (growth features + block_geoid). Confirm exact name.
-BQ_TABLE_PARCEL_GROWTH = os.getenv("BQ_TABLE_PARCEL_GROWTH", "loc_parcels_growth_parcel")

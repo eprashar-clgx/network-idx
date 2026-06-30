@@ -441,25 +441,25 @@ FCC_COVERAGE_TRACT_BUCKETED_OUTPUTS = [
 # direction, the provider-landscape ordinal map, and the v1 run identity.
 
 GROWTH_FEATURES = [
-    "median_landuse_change_qtr_mi_cnt",
-    "median_pre_early_dev_qtr_mi_cnt",
-    "median_bldr_dev_qtr_mi_cnt",
-    "median_new_permit_qtr_mi_cnt",
-    "median_dist_nearest_hotspot",
+    "landuse_change_qtr_mi_cnt",
+    "pre_early_dev_qtr_mi_cnt",
+    "bldr_dev_qtr_mi_cnt",
+    "new_permit_qtr_mi_cnt",
+    "dist_to_nearest_hotspot_m",
 ]
 
 TELECOM_FEATURES = [
     "cable_penetration",
     "fiber_opportunity_gap",
     "fiber_speed_top_tier",
-    "median_dist_nearest_fiber_m",
+    "dist_to_nearest_fiber_m",
     "provider_competitive_landscape_ord",
 ]
 
 DEMO_FEATURES = [
     "pop_ch_avg",
     "pop_pctch_avg",
-    "estimated_census_housing_units",
+    "census_housing_units",
 ]
 
 # Canonical column order for the weight vector (Growth -> FCC -> Demo).
@@ -481,8 +481,8 @@ SCORING_BUCKET_WEIGHTS = {
 
 # Features where a LOWER raw value means a HIGHER opportunity score (invert on scaling).
 INVERTED_FEATURES = {
-    "median_dist_nearest_hotspot",
-    "median_dist_nearest_fiber_m",
+    "dist_to_nearest_hotspot_m",
+    "dist_to_nearest_fiber_m",
     "cable_penetration",
     "fiber_speed_top_tier",
     "provider_competitive_landscape_ord",
@@ -510,3 +510,43 @@ SCORING_RUN_MODEL = "lightgbm"
 SCORING_RUN_K = 8
 SCORING_RUN_VERSION = "v1"
 SCORING_RUN_ID = f"{SCORING_RUN_MODEL}_k{SCORING_RUN_K}_{SCORING_RUN_VERSION}"
+
+# ── Scaling rules for parcel index ────────────────────────────────────────────
+# NA fill per feature. Numeric = fill with that constant. 'p99' / 'max_x1.25' are
+# data-derived country-wide caps (computed once and persisted in scaling_params).
+SCALING_NA_FILL_RULES = {
+    "landuse_change_qtr_mi_cnt": 0.0,
+    "pre_early_dev_qtr_mi_cnt": 0.0,
+    "bldr_dev_qtr_mi_cnt": 0.0,
+    "new_permit_qtr_mi_cnt": 0.0,
+    "dist_to_nearest_hotspot_m": "max_x1.25",
+    "cable_penetration": 0.0,
+    "fiber_opportunity_gap": 1.0,
+    "fiber_speed_top_tier": 0.0,
+    "dist_to_nearest_fiber_m": "p99",
+    "provider_competitive_landscape_ord": 0.0,
+    "pop_ch_avg": 0.0,
+    "pop_pctch_avg": 0.0,
+    "census_housing_units": 0.0,
+}
+
+# Distance features whose UPPER scaling bound = their NA cap (winsorize at cap):
+# values above the cap clip to it, and NA-filled rows sit exactly at the cap
+# (scaled = 1 -> inverted score = 0, i.e. "far / unknown = lowest opportunity").
+SCALING_CAP_AS_MAX = {
+    "dist_to_nearest_fiber_m",
+    "dist_to_nearest_hotspot_m",
+}
+
+# Maps trained-model feature names → parcel_features canonical column names.
+# Used by build_weights.py when exporting SHAP weights.
+MODEL_TO_SCORING_FEATURE = {
+    "median_landuse_change_qtr_mi_cnt": "landuse_change_qtr_mi_cnt",
+    "median_pre_early_dev_qtr_mi_cnt": "pre_early_dev_qtr_mi_cnt",
+    "median_bldr_dev_qtr_mi_cnt": "bldr_dev_qtr_mi_cnt",
+    "median_new_permit_qtr_mi_cnt": "new_permit_qtr_mi_cnt",
+    "median_dist_nearest_hotspot": "dist_to_nearest_hotspot_m",
+    "median_dist_nearest_fiber_m": "dist_to_nearest_fiber_m",
+    "estimated_census_housing_units": "census_housing_units",
+    # telecom + pop_ch/pctch names already match — identity
+}

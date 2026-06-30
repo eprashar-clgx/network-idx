@@ -1,0 +1,1 @@
+"""Parcel-level scoring: weights, scaling, and index computation."""
