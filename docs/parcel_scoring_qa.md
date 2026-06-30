@@ -188,3 +188,58 @@ to confirm empty/degenerate blocks aren't inflating the FCC sub-index (cross-che
 - [ ] No `inf` / unexpected `NaN` reaches scaling (C3, F1).
 - [ ] Weights load 1:1, 13 features, bucket weights 0.40 / 0.44 / 0.16 (C4).
 - [ ] Post-scoring QC: degenerate blocks not inflating FCC sub-index (F5).
+
+## End-to-End Flow
+
+```mermaid
+flowchart TD
+    %% ── Telecom: block grain ──
+    subgraph TELECOM["Telecom (block grain)"]
+        SP_RAW["processing/fcc_fixed_speeds.py<br/>data/processed/fcc/speeds/*.parquet"]
+        SP_BQ["transfer/fcc_fixed_speeds_and_providers_bq.py"]
+        SP_TBL["teu_telecom.fcc_fixed_speeds_block<br/>teu_telecom.fcc_fixed_speeds_providers_block"]
+        CV_RAW["feature_engg/fcc_fixed_summary_est_ct_block.py<br/>data/features/fcc/broadband_coverage/block/*.parquet"]
+        CV_BQ["transfer/fcc_fixed_coverage_features_ct_bq.py"]
+        CV_TBL["teu_telecom.fcc_coverage_block"]
+        TEL_SQL["feature_engg/telecom_features_block.sql<br/>(telecom_features_block_bq.py)"]
+        TEL_TBL["teu_features.telecom_features_block"]
+
+        SP_RAW --> SP_BQ --> SP_TBL --> TEL_SQL
+        CV_RAW --> CV_BQ --> CV_TBL --> TEL_SQL
+        TEL_SQL --> TEL_TBL
+    end
+
+    %% ── Growth + Demo (already engineered) ──
+    subgraph GD["Growth (parcel) + Demo (tract)"]
+        GROWTH_TBL["teu_features.&lt;parcel growth + distance&gt;<br/>(BQ_TABLE_PARCEL_GROWTH, has block_geoid)"]
+        DEMO_TBL["teu_features.demo_pop_ct<br/>(pop_ch_avg / pop_pctch_avg = 5-yr avg)"]
+    end
+
+    %% ── Join spine -> parcel features ──
+    JOIN["Join on block_geoid (telecom)<br/>+ tract_geoid = block_geoid[:11] (demo)"]
+    PARCEL_FEAT["teu_features.parcel_features<br/>(13 features @ parcel grain)"]
+    TEL_TBL --> JOIN
+    GROWTH_TBL --> JOIN
+    DEMO_TBL --> JOIN
+    JOIN --> PARCEL_FEAT
+
+    %% ── Weights (from trained model) ──
+    subgraph W["Weights"]
+        MODEL["LightGBM k=8 (04_eda_classification_v2)<br/>SHAP -> raw weights"]
+        BUILD_W["scoring/build_weights.py"]
+        W_TBL["teu_analytics.feature_weights<br/>(run_id = lightgbm_k8_v1)"]
+        MODEL --> BUILD_W --> W_TBL
+    end
+
+    %% ── Scaling params (country-wide, frozen) ──
+    BUILD_S["scoring/build_scaling_params.py<br/>(1 BQ scan: MIN/MAX/P99)"]
+    S_TBL["teu_analytics.scaling_params<br/>(run_id-keyed: min, max, na_fill, invert)"]
+    PARCEL_FEAT --> BUILD_S --> S_TBL
+
+    %% ── Scoring ──
+    SCORE["scoring/parcel_score.py<br/>apply_scaling + weighted-avg sub-indices"]
+    OUT["teu_outputs.parcel_scores<br/>(scaled feats, idx_growth/telecom/demo, idx_overall_wa)"]
+    PARCEL_FEAT --> SCORE
+    W_TBL --> SCORE
+    S_TBL --> SCORE
+    SCORE --> OUT
