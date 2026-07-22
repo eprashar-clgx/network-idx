@@ -21,7 +21,7 @@ Usage:
 
 import argparse
 import logging
-
+import pandas as pd
 from google.cloud import bigquery
 
 from network_idx.config import (
@@ -37,6 +37,8 @@ from network_idx.config import (
     BQ_DATASET_OUTPUTS,
     BQ_TABLE_PARCEL_SCORES,
     BQ_TABLE_FIBER_IDX_PARCEL,
+    BQ_TABLE_FIBER_IDX_PARCEL_QA_MINMAX,
+    BQ_TABLE_FIBER_IDX_PARCEL_QA_FILLRATES,
 )
 from network_idx.constants import (
     ALL_SCORING_FEATURES,
@@ -52,6 +54,13 @@ from network_idx.utils import check_and_authenticate
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
+
+# QA / rounding
+ROUND_INDEX = 2   # 0-100 indices & sub-indices
+ROUND_VALUE = 4   # 0-1 scaled, weights, raw feature floats, raw sub-index sums
+NUMERIC_BQ_TYPES = {"INTEGER", "INT64", "FLOAT", "FLOAT64", "NUMERIC", "BIGNUMERIC"}
+INTEGER_RAW_FEATURES = {"census_housing_units"}  # don't ROUND (would coerce INT->FLOAT)
+
 
 
 def get_bq_client() -> bigquery.Client:
@@ -149,11 +158,15 @@ rescaled AS (
 )
 SELECT
   parcel_shape_id, block_geoid, tract_geoid,
-  raw_growth, raw_telecom, raw_demo,
-  idx_growth, idx_telecom, idx_demo,
-  {_f(bw['growth'])} * idx_growth
-    + {_f(bw['telecom'])} * idx_telecom
-    + {_f(bw['demo'])} * idx_demo AS idx_overall,
+  ROUND(raw_growth, {ROUND_VALUE}) AS raw_growth,
+  ROUND(raw_telecom, {ROUND_VALUE}) AS raw_telecom,
+  ROUND(raw_demo, {ROUND_VALUE}) AS raw_demo,
+  ROUND(idx_growth, {ROUND_INDEX}) AS idx_growth,
+  ROUND(idx_telecom, {ROUND_INDEX}) AS idx_telecom,
+  ROUND(idx_demo, {ROUND_INDEX}) AS idx_demo,
+  ROUND({_f(bw['growth'])} * idx_growth
+        + {_f(bw['telecom'])} * idx_telecom
+        + {_f(bw['demo'])} * idx_demo, {ROUND_INDEX}) AS idx_overall,
   '{run_id}' AS run_id,
   CURRENT_TIMESTAMP() AS created_at
 FROM rescaled
@@ -196,36 +209,38 @@ def build_delivery_query(
     cols.append("pf.block_geoid AS census_block_id")
     cols.append("g.h3_res8 AS h3_id")
 
-    # indices (0-100)
-    cols.append("ps.idx_demo AS demographic_index")
-    cols.append("ps.idx_growth AS growth_index")
-    cols.append("ps.idx_telecom AS telecom_index")
-    cols.append("ps.idx_overall AS fiber_potential_index")
+    # indices (0-100) -> 2 dp
+    cols.append(f"ROUND(ps.idx_demo, {ROUND_INDEX}) AS demographic_index")
+    cols.append(f"ROUND(ps.idx_growth, {ROUND_INDEX}) AS growth_index")
+    cols.append(f"ROUND(ps.idx_telecom, {ROUND_INDEX}) AS telecom_index")
+    cols.append(f"ROUND(ps.idx_overall, {ROUND_INDEX}) AS fiber_potential_index")
 
-    # bucket weights (constants broadcast to every row)
-    cols.append(f"{_f(bw['demo'])} AS demographic_weight")
-    cols.append(f"{_f(bw['growth'])} AS growth_weight")
-    cols.append(f"{_f(bw['telecom'])} AS telecom_weight")
+    # bucket weights (constants; pre-rounded in Python)
+    cols.append(f"{_f(round(bw['demo'], ROUND_VALUE))} AS demographic_weight")
+    cols.append(f"{_f(round(bw['growth'], ROUND_VALUE))} AS growth_weight")
+    cols.append(f"{_f(round(bw['telecom'], ROUND_VALUE))} AS telecom_weight")
 
-    # raw feature values (renamed; distances kept in meters; provider -> STRING label)
+    # raw feature values (renamed; distances in meters; provider -> STRING; ints untouched)
     for f in ALL_SCORING_FEATURES:
         dn = DELIVERY_FEATURE_NAMES[f]
         if f == "provider_competitive_landscape_ord":
             cols.append(f"{_provider_label_case('pf')} AS {dn}")
-        else:
+        elif f in INTEGER_RAW_FEATURES:
             cols.append(f"pf.`{f}` AS {dn}")
+        else:
+            cols.append(f"ROUND(pf.`{f}`, {ROUND_VALUE}) AS {dn}")
 
-    # per-feature weights (within-bucket; constants)
+    # per-feature weights (within-bucket; constants; pre-rounded)
     for f in ALL_SCORING_FEATURES:
         dn = DELIVERY_FEATURE_NAMES[f]
-        cols.append(f"{_f(w_in_bucket[f])} AS {dn}_weight")
+        cols.append(f"{_f(round(w_in_bucket[f], ROUND_VALUE))} AS {dn}_weight")
 
-    # per-feature scaled [0,1] (recomputed from parcel_features via frozen scaling_params)
+    # per-feature scaled [0,1] -> 4 dp
     for f in ALL_SCORING_FEATURES:
         dn = DELIVERY_FEATURE_NAMES[f]
         p = params_by_feat[f]
         se = _scaled_expr(f, p["min_val"], p["max_val"], p["na_fill"], bool(p["invert"]), alias="pf")
-        cols.append(f"{se} AS {dn}_scaled")
+        cols.append(f"ROUND({se}, {ROUND_VALUE}) AS {dn}_scaled")
 
     # extra raw passthrough
     cols.append("g.growth_parcel_qtr_mi_cnt AS growth_parcels_qtr_mi_cnt")
@@ -301,6 +316,81 @@ def run_delivery(run_id: str, dry_run: bool = False) -> None:
     client.query(sql).result()
     logger.info("Done.")
 
+def _write_qa(client: bigquery.Client, df: pd.DataFrame, table_id: str, run_id: str) -> None:
+    """Replace this run's QA rows (delete-then-append)."""
+    try:
+        client.query(
+            f"DELETE FROM `{table_id}` WHERE run_id = @run_id",
+            job_config=bigquery.QueryJobConfig(query_parameters=[
+                bigquery.ScalarQueryParameter("run_id", "STRING", run_id),
+            ]),
+        ).result()
+    except Exception as e:  # table may not exist yet
+        logger.info(f"Skipping delete (table may not exist yet): {e}")
+    client.load_table_from_dataframe(
+        df, table_id,
+        job_config=bigquery.LoadJobConfig(write_disposition=bigquery.WriteDisposition.WRITE_APPEND),
+    ).result()
+    logger.info(f"Wrote {len(df)} QA rows to {table_id}")
+
+
+def run_qa(run_id: str, dry_run: bool = False) -> None:
+    """Profile the delivery table: Table 1 = min/max (numeric cols), Table 2 = fill rates (all cols)."""
+    target = f"{GCS_PROJECT_ID}.{BQ_DATASET_OUTPUTS}.{BQ_TABLE_FIBER_IDX_PARCEL}"
+    minmax_out = f"{GCS_PROJECT_ID}.{BQ_DATASET_OUTPUTS}.{BQ_TABLE_FIBER_IDX_PARCEL_QA_MINMAX}"
+    fill_out = f"{GCS_PROJECT_ID}.{BQ_DATASET_OUTPUTS}.{BQ_TABLE_FIBER_IDX_PARCEL_QA_FILLRATES}"
+
+    client = get_bq_client()
+    schema = client.get_table(target).schema
+    numeric_cols = [f.name for f in schema if f.field_type in NUMERIC_BQ_TYPES]
+    all_cols = [f.name for f in schema]
+
+    # single-scan wide aggregations
+    mm_parts = []
+    for c in numeric_cols:
+        mm_parts.append(f"MIN(`{c}`) AS `{c}__min`")
+        mm_parts.append(f"MAX(`{c}`) AS `{c}__max`")
+    minmax_sql = "SELECT\n  " + ",\n  ".join(mm_parts) + f"\nFROM `{target}`"
+
+    fill_parts = ["COUNT(*) AS `__total`"] + [f"COUNT(`{c}`) AS `{c}__nn`" for c in all_cols]
+    fill_sql = "SELECT\n  " + ",\n  ".join(fill_parts) + f"\nFROM `{target}`"
+
+    logger.info(f"QA target: {target}")
+    if dry_run:
+        logger.info("Dry run — min/max SQL:")
+        print(minmax_sql)
+        logger.info("Dry run — fill-rate SQL:")
+        print(fill_sql)
+        return
+
+    now = pd.Timestamp.now(tz="UTC")
+
+    mm = list(client.query(minmax_sql).result())[0]
+    minmax_df = pd.DataFrame([{
+        "run_id": run_id,
+        "column_name": c,
+        "min_val": None if mm[f"{c}__min"] is None else float(mm[f"{c}__min"]),
+        "max_val": None if mm[f"{c}__max"] is None else float(mm[f"{c}__max"]),
+        "created_at": now,
+    } for c in numeric_cols])
+
+    fr = list(client.query(fill_sql).result())[0]
+    total = int(fr["__total"])
+    fill_df = pd.DataFrame([{
+        "run_id": run_id,
+        "column_name": c,
+        "non_null": int(fr[f"{c}__nn"]),
+        "total": total,
+        "fill_rate": round(fr[f"{c}__nn"] / total, 4) if total else None,
+        "created_at": now,
+    } for c in all_cols])
+
+    print(minmax_df.to_string(index=False))
+    print(fill_df.to_string(index=False))
+    _write_qa(client, minmax_df, minmax_out, run_id)
+    _write_qa(client, fill_df, fill_out, run_id)
+    logger.info("QA done.")
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Score all parcels / build the delivery table in BigQuery.")
@@ -309,9 +399,12 @@ if __name__ == "__main__":
                         help="Build the customer fiber_idx_v1_parcel table (requires parcel_scores to exist).")
     parser.add_argument("--dry-run", action="store_true", default=False,
                         help="Print the rendered SQL without executing it.")
+    parser.add_argument("--qa", action="store_true", default=False,
+                        help="Profile the delivery table: min/max + fill-rate QA tables.")
     args = parser.parse_args()
-
-    if args.delivery:
+    if args.qa:
+        run_qa(run_id=args.run_id, dry_run=args.dry_run)
+    elif args.delivery:
         run_delivery(run_id=args.run_id, dry_run=args.dry_run)
     else:
         run(run_id=args.run_id, dry_run=args.dry_run)
