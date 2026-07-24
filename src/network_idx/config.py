@@ -143,3 +143,4 @@ BQ_TABLE_FIBER_IDX_PARCEL = "fiber_idx_v1_parcel"   # teu_outputs — customer d
 
 BQ_TABLE_FIBER_IDX_PARCEL_QA_MINMAX = "fiber_idx_v1_parcel_qa_minmax"      # teu_outputs
 BQ_TABLE_FIBER_IDX_PARCEL_QA_FILLRATES = "fiber_idx_v1_parcel_qa_fillrates"  # teu_outputs
+BQ_TABLE_FIBER_IDX_PARCEL_QA_INDEX_BUCKETS = "fiber_idx_v1_parcel_qa_index_buckets"  # teu_outputs

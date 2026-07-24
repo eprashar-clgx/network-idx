@@ -39,6 +39,7 @@ from network_idx.config import (
     BQ_TABLE_FIBER_IDX_PARCEL,
     BQ_TABLE_FIBER_IDX_PARCEL_QA_MINMAX,
     BQ_TABLE_FIBER_IDX_PARCEL_QA_FILLRATES,
+    BQ_TABLE_FIBER_IDX_PARCEL_QA_INDEX_BUCKETS
 )
 from network_idx.constants import (
     ALL_SCORING_FEATURES,
@@ -60,7 +61,9 @@ ROUND_INDEX = 2   # 0-100 indices & sub-indices
 ROUND_VALUE = 4   # 0-1 scaled, weights, raw feature floats, raw sub-index sums
 NUMERIC_BQ_TYPES = {"INTEGER", "INT64", "FLOAT", "FLOAT64", "NUMERIC", "BIGNUMERIC"}
 INTEGER_RAW_FEATURES = {"census_housing_units"}  # don't ROUND (would coerce INT->FLOAT)
-
+INDEX_COLUMNS = ["demographic_index", "growth_index", "telecom_index", "fiber_potential_index"]
+INDEX_BINS = [0, 25, 50, 75, 100]  # fixed score bands; last band is inclusive of 100
+ROUND_WEIGHT = 2   # weights emitted as PERCENTAGES (0-100), display-only
 
 
 def get_bq_client() -> bigquery.Client:
@@ -215,10 +218,10 @@ def build_delivery_query(
     cols.append(f"ROUND(ps.idx_telecom, {ROUND_INDEX}) AS telecom_index")
     cols.append(f"ROUND(ps.idx_overall, {ROUND_INDEX}) AS fiber_potential_index")
 
-    # bucket weights (constants; pre-rounded in Python)
-    cols.append(f"{_f(round(bw['demo'], ROUND_VALUE))} AS demographic_weight")
-    cols.append(f"{_f(round(bw['growth'], ROUND_VALUE))} AS growth_weight")
-    cols.append(f"{_f(round(bw['telecom'], ROUND_VALUE))} AS telecom_weight")
+    # bucket weights as PERCENTAGES (0-100), 2 dp — display only; scoring uses fractions
+    cols.append(f"{_f(round(bw['demo'] * 100, ROUND_WEIGHT))} AS demographic_weight")
+    cols.append(f"{_f(round(bw['growth'] * 100, ROUND_WEIGHT))} AS growth_weight")
+    cols.append(f"{_f(round(bw['telecom'] * 100, ROUND_WEIGHT))} AS telecom_weight")
 
     # raw feature values (renamed; distances in meters; provider -> STRING; ints untouched)
     for f in ALL_SCORING_FEATURES:
@@ -231,9 +234,10 @@ def build_delivery_query(
             cols.append(f"ROUND(pf.`{f}`, {ROUND_VALUE}) AS {dn}")
 
     # per-feature weights (within-bucket; constants; pre-rounded)
+    # per-feature weights as PERCENTAGES within bucket (0-100), 2 dp
     for f in ALL_SCORING_FEATURES:
         dn = DELIVERY_FEATURE_NAMES[f]
-        cols.append(f"{_f(round(w_in_bucket[f], ROUND_VALUE))} AS {dn}_weight")
+        cols.append(f"{_f(round(w_in_bucket[f] * 100, ROUND_WEIGHT))} AS {dn}_weight")
 
     # per-feature scaled [0,1] -> 4 dp
     for f in ALL_SCORING_FEATURES:
@@ -389,6 +393,44 @@ def run_qa(run_id: str, dry_run: bool = False) -> None:
     print(fill_df.to_string(index=False))
     _write_qa(client, minmax_df, minmax_out, run_id)
     _write_qa(client, fill_df, fill_out, run_id)
+
+    buckets_out = f"{GCS_PROJECT_ID}.{BQ_DATASET_OUTPUTS}.{BQ_TABLE_FIBER_IDX_PARCEL_QA_INDEX_BUCKETS}"
+
+    band_parts = []
+    for c in INDEX_COLUMNS:
+        for i in range(len(INDEX_BINS) - 1):
+            lo, hi = INDEX_BINS[i], INDEX_BINS[i + 1]
+            op = "<=" if i == len(INDEX_BINS) - 2 else "<"  # last band inclusive of 100
+            band_parts.append(f"COUNTIF(`{c}` >= {lo} AND `{c}` {op} {hi}) AS `{c}__b{i}`")
+    bands_sql = ("SELECT\n  COUNT(*) AS `__total`,\n  "
+                 + ",\n  ".join(band_parts) + f"\nFROM `{target}`")
+
+    if dry_run:
+        logger.info("Dry run — index-band SQL:")
+        print(bands_sql)
+        # (return already happened above for min/max + fill; keep the earlier return)
+
+    br = list(client.query(bands_sql).result())[0]
+    total_b = int(br["__total"])
+    bucket_rows = []
+
+    for c in INDEX_COLUMNS:
+        for i in range(len(INDEX_BINS) - 1):
+            lo, hi = INDEX_BINS[i], INDEX_BINS[i + 1]
+            cnt = int(br[f"{c}__b{i}"])
+            bucket_rows.append({
+                "run_id": run_id,
+                "index_name": c,
+                "band": f"{lo}-{hi}",
+                "parcel_count": cnt,
+                "total": total_b,
+                "pct": round(cnt / total_b, 4) if total_b else None,
+                "created_at": now,
+            })
+    buckets_df = pd.DataFrame(bucket_rows)
+    print(buckets_df.to_string(index=False))
+    _write_qa(client, buckets_df, buckets_out, run_id)
+
     logger.info("QA done.")
 
 
