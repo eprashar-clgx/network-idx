@@ -80,6 +80,15 @@ The pipeline produces **one 0–100 score per US parcel**, plus three 0–100 su
 features take `1 − s` so that a *lower* raw value scores *higher*. Let `s(f)` denote the scaled
 value of feature `f`.
 
+> **Scaling distribution — deliberate choice.** The `min`/`max` (and the P99 / max×1.25 caps) are
+> measured on the **parcel** population being scored, *not* the tract-median population used to
+> derive the weights (§3). Scaling on the parcel distribution spreads scores across the full 0–100
+> range and preserves resolution between parcels; the tract-median range would compress many
+> parcels against the caps. The weights carry over unchanged because they are *relative*
+> importances, independent of the scaling range. Same policy (which percentile, which fill) is
+> declared once in the constants file and applied at each grain; only the resulting numeric cutoff
+> differs by grain.
+
 **Sub-index roll-up.** Each sub-index is a within-bucket weighted sum of scaled features, then
 min-max rescaled to 0–100 over the full parcel population:
 
