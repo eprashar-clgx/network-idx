@@ -18,14 +18,15 @@ SELECT
     p.pre_early_dev_qtr_mi_cnt,
     p.bldr_dev_qtr_mi_cnt,
     p.new_permit_qtr_mi_cnt,
-    hs.dist_to_nearest_hotspot_m,
+    hs.dist_to_nearest_hotspot_m AS dist_to_nearest_hotspot_miles,
 
     -- ── Telecom (block grain) ──
     t.cable_penetration,
     t.fiber_opportunity_gap,
     t.fiber_speed_top_tier,
     t.provider_competitive_landscape_ord,
-    rf.dist_to_nearest_fiber_m,
+    rf.dist_to_nearest_fiber_m AS dist_to_nearest_fiber_miles,
+    rf.nearest_fiber_id,
 
     -- ── Demo: pop change (tract) + housing units (block) ──
     d.pop_ch_avg,

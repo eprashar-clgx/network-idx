@@ -36,9 +36,10 @@ SELECT
     c.fiber_provider_count,
     c.fiber_max_download_speed,
     c.fiber_max_upload_speed,
-    d.* EXCEPT(tract_id),
-    e.mean_dist_nearest_fiber_m,
-    e.median_dist_nearest_fiber_m,
+    d.* EXCEPT(tract_id, mean_dist_nearest_hotspot_m, median_dist_nearest_hotspot),
+    d.median_dist_nearest_hotspot AS median_dist_nearest_hotspot_miles,
+    e.mean_dist_nearest_fiber_m AS mean_dist_nearest_fiber_miles,
+    e.median_dist_nearest_fiber_m AS median_dist_nearest_fiber_miles,
     f.geometry
 FROM `{coverage_bucketed_table}` a
 LEFT JOIN `{demo_pop_table}` b ON a.tract_geoid = b.tract_geoid
