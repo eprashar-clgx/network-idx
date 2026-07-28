@@ -18,6 +18,8 @@ SELECT
     p.pre_early_dev_qtr_mi_cnt,
     p.bldr_dev_qtr_mi_cnt,
     p.new_permit_qtr_mi_cnt,
+    -- Distances: base `_m` columns already hold MILES (converted upstream in
+    -- loc_growth_distance / rextag_distance); we only rename here — do NOT divide.
     hs.dist_to_nearest_hotspot_m AS dist_to_nearest_hotspot_miles,
 
     -- ── Telecom (block grain) ──

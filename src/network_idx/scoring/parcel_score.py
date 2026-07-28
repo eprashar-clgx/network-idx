@@ -46,7 +46,6 @@ from network_idx.constants import (
     SCORING_BUCKETS,
     SCORING_RUN_ID,
     DELIVERY_FEATURE_NAMES,
-    PROVIDER_LANDSCAPE_LABEL,
 )
 
 from network_idx.scoring.scaling import read_scaling_params
@@ -175,16 +174,21 @@ SELECT
 FROM rescaled
 """
 
-def _provider_label_case(alias: str) -> str:
-    """Reconstruct the provider_competitive_landscape STRING label from its ordinal."""
-    whens = "\n      ".join(
-        f"WHEN {k} THEN '{v}'" for k, v in sorted(PROVIDER_LANDSCAPE_LABEL.items())
-    )
-    return (
-        f"CASE CAST({alias}.`provider_competitive_landscape_ord` AS INT64)\n"
-        f"      {whens}\n"
-        f"      ELSE NULL END"
-    )
+def _filled_raw_expr(feature: str, lo: float, hi: float, na_fill: float, alias: str) -> str:
+    """Fill NaN/Inf -> na_fill, then winsorize into [lo, hi] — the RAW value that
+    actually fed the index (no min-max, no invert). parcel_features keeps the true
+    unclipped raw for drift/null monitoring; this fill+clip view lives only in
+    parcel_scores / fiber_idx_v1_parcel so we can measure the impact of the clip rules."""
+    xf = f"CAST({alias}.`{feature}` AS FLOAT64)"
+    clean = f"COALESCE(IF(IS_NAN({xf}) OR IS_INF({xf}), NULL, {xf}), {_f(na_fill)})"
+    return f"LEAST(GREATEST({clean}, {_f(lo)}), {_f(hi)})"
+
+
+def _provider_type_code_expr(alias: str) -> str:
+    """provider_competitive_landscape_ord -> zero-padded STRING type code '00'..'06'.
+    A NULL/'other' ordinal maps to '00' (its na_fill = 0.0) so the column has no nulls."""
+    ord_col = f"CAST({alias}.`provider_competitive_landscape_ord` AS INT64)"
+    return f"LPAD(CAST(COALESCE({ord_col}, 0) AS STRING), 2, '0')"
 
 
 def build_delivery_query(
@@ -211,6 +215,7 @@ def build_delivery_query(
     cols.append("g.parcel_polygon AS geometry")
     cols.append("pf.block_geoid AS census_block_id")
     cols.append("g.h3_res8 AS h3_id")
+    cols.append("pf.nearest_fiber_id")
 
     # indices (0-100) -> 2 dp
     cols.append(f"ROUND(ps.idx_demo, {ROUND_INDEX}) AS demographic_index")
@@ -223,15 +228,22 @@ def build_delivery_query(
     cols.append(f"{_f(round(bw['growth'] * 100, ROUND_WEIGHT))} AS growth_weight")
     cols.append(f"{_f(round(bw['telecom'] * 100, ROUND_WEIGHT))} AS telecom_weight")
 
-    # raw feature values (renamed; distances in meters; provider -> STRING; ints untouched)
+    # raw feature values: fill NA + winsorize/clip per scaling_params (distances in
+    # MILES; provider -> zero-padded type code '00'..'06'; census_housing_units kept
+    # INTEGER). NOTE: parcel_features holds the true UNCLIPPED raw for drift/null
+    # monitoring; here we deliver the fill+clip values so the delivered raw matches
+    # exactly what fed the index (lets us monitor the impact of the clip rules).
     for f in ALL_SCORING_FEATURES:
         dn = DELIVERY_FEATURE_NAMES[f]
         if f == "provider_competitive_landscape_ord":
-            cols.append(f"{_provider_label_case('pf')} AS {dn}")
-        elif f in INTEGER_RAW_FEATURES:
-            cols.append(f"pf.`{f}` AS {dn}")
+            cols.append(f"{_provider_type_code_expr('pf')} AS {dn}")
+            continue
+        p = params_by_feat[f]
+        fr = _filled_raw_expr(f, p["min_val"], p["max_val"], p["na_fill"], alias="pf")
+        if f in INTEGER_RAW_FEATURES:
+            cols.append(f"CAST(ROUND({fr}) AS INT64) AS {dn}")
         else:
-            cols.append(f"ROUND(pf.`{f}`, {ROUND_VALUE}) AS {dn}")
+            cols.append(f"ROUND({fr}, {ROUND_VALUE}) AS {dn}")
 
     # per-feature weights (within-bucket; constants; pre-rounded)
     # per-feature weights as PERCENTAGES within bucket (0-100), 2 dp

@@ -23,7 +23,8 @@ from network_idx.constants import (
     INVERTED_FEATURES,
     SCALING_NA_FILL_RULES,
     SCALING_CAP_AS_MAX,
-    SCALING_WINSORIZE_QUANTILE
+    SCALING_WINSORIZE_QUANTILE,
+    SCALING_DOMAIN_BOUNDS,
 )
 
 logger = logging.getLogger(__name__)
@@ -59,21 +60,40 @@ def apply_feature_fills(df: pd.DataFrame, features=ALL_SCORING_FEATURES) -> pd.D
         else:
             if f in SCALING_WINSORIZE_QUANTILE:
                 col = col.clip(upper=col.quantile(SCALING_WINSORIZE_QUANTILE[f]))
+            elif f in SCALING_DOMAIN_BOUNDS:
+                lo, hi = SCALING_DOMAIN_BOUNDS[f]
+                col = col.clip(lower=lo, upper=hi)
             out[f] = col.fillna(float(rule))
     return out
 
 
 def build_stats_query(source_table: str) -> str:
-    """Single-scan aggregation for all features (NULLs ignored by MIN/MAX/quantiles)."""
-    const_features = [f for f in ALL_SCORING_FEATURES if f not in SCALING_CAP_AS_MAX]
+    """Single-scan aggregation for all features (NULLs ignored by MIN/MAX/quantiles).
+    Bounds by category:
+      * domain-bounded (SCALING_DOMAIN_BOUNDS): fixed [0,1] — no scan.
+      * winsorized (SCALING_WINSORIZE_QUANTILE): max = the P99.5 quantile so growth
+        counts are winsorized at scoring exactly as in training.
+      * cap-as-max (SCALING_CAP_AS_MAX): max = P99 / rawmax*1.25 distance cap.
+      * const: min/max over the FILLED column so the NA fill sits inside the range."""
+    const_features = [f for f in ALL_SCORING_FEATURES
+                      if f not in SCALING_CAP_AS_MAX
+                      and f not in SCALING_DOMAIN_BOUNDS
+                      and f not in SCALING_WINSORIZE_QUANTILE]
+    winsor_features = [f for f in ALL_SCORING_FEATURES if f in SCALING_WINSORIZE_QUANTILE]
     cap_features = [f for f in ALL_SCORING_FEATURES if f in SCALING_CAP_AS_MAX]
 
     parts = []
     for f in const_features:
         fill = SCALING_NA_FILL_RULES[f]
-        # min/max over the FILLED column so the constant fill is reflected in the range
         parts.append(f"MIN(COALESCE(`{f}`, {fill})) AS `{f}__min`")
         parts.append(f"MAX(COALESCE(`{f}`, {fill})) AS `{f}__max`")
+    for f in winsor_features:
+        fill = SCALING_NA_FILL_RULES[f]
+        off = int(round(SCALING_WINSORIZE_QUANTILE[f] * 1000))
+        parts.append(f"MIN(COALESCE(`{f}`, {fill})) AS `{f}__min`")
+        parts.append(
+            f"APPROX_QUANTILES(COALESCE(`{f}`, {fill}), 1000)[OFFSET({off})] AS `{f}__winmax`"
+        )
     for f in cap_features:
         parts.append(f"MIN(`{f}`) AS `{f}__min`")
         parts.append(f"MAX(`{f}`) AS `{f}__rawmax`")
@@ -95,9 +115,13 @@ def compute_scaling_params_bq(
     records = []
     for f in ALL_SCORING_FEATURES:
         invert = f in INVERTED_FEATURES
-        min_val = float(row[f"{f}__min"])
 
-        if f in SCALING_CAP_AS_MAX:
+        if f in SCALING_DOMAIN_BOUNDS:
+            lo, hi = SCALING_DOMAIN_BOUNDS[f]
+            min_val, max_val = float(lo), float(hi)
+            na_fill = float(SCALING_NA_FILL_RULES[f])
+        elif f in SCALING_CAP_AS_MAX:
+            min_val = float(row[f"{f}__min"])
             rule = SCALING_NA_FILL_RULES[f]
             if rule == "p99":
                 cap = float(row[f"{f}__p99"])
@@ -107,7 +131,12 @@ def compute_scaling_params_bq(
                 raise ValueError(f"Unknown cap rule for {f}: {rule!r}")
             max_val = cap
             na_fill = cap
+        elif f in SCALING_WINSORIZE_QUANTILE:
+            min_val = float(row[f"{f}__min"])
+            max_val = float(row[f"{f}__winmax"])
+            na_fill = float(SCALING_NA_FILL_RULES[f])
         else:
+            min_val = float(row[f"{f}__min"])
             max_val = float(row[f"{f}__max"])
             na_fill = float(SCALING_NA_FILL_RULES[f])
 

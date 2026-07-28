@@ -547,6 +547,18 @@ SCALING_WINSORIZE_QUANTILE = {
     "new_permit_qtr_mi_cnt": 0.995,
 }
 
+# Proportion features bounded to the fixed domain [0, 1] at SCORING time.
+# Values outside (data artifacts — e.g. fiber_location_count >> census_housing_units
+# giving fiber_opportunity_gap = -192, or cable_location_count > housing giving
+# cable_penetration > 1) clip into range, restoring parity with the tract builder's
+# .clip(0, 1) used for weight derivation. The RAW unclipped value is kept in
+# parcel_features for drift/null monitoring; the clip only takes effect in
+# scaling_params -> parcel_scores -> fiber_idx_v1_parcel (so we can measure its impact).
+SCALING_DOMAIN_BOUNDS = {
+    "cable_penetration": (0.0, 1.0),
+    "fiber_opportunity_gap": (0.0, 1.0),
+}
+
 # Maps trained-model feature names → parcel_features canonical column names.
 # Used by build_weights.py when exporting SHAP weights.
 MODEL_TO_SCORING_FEATURE = {
@@ -570,9 +582,9 @@ DELIVERY_FEATURE_NAMES = {
     "bldr_dev_qtr_mi_cnt": "bldr_dev_qtr_mi_cnt",
     "landuse_change_qtr_mi_cnt": "landuse_change_qtr_mi_cnt",
     "new_permit_qtr_mi_cnt": "new_permit_qtr_mi_cnt",
-    "dist_to_nearest_hotspot_miles": "dist_nearest_hotspot",   
-    "dist_to_nearest_fiber_miles": "dist_nearest_fiber",       
-    "provider_competitive_landscape_ord": "provider_competitive_landscape",  # emitted as STRING
+    "dist_to_nearest_hotspot_miles": "dist_nearest_hotspot_miles",
+    "dist_to_nearest_fiber_miles": "dist_nearest_fiber_miles",
+    "provider_competitive_landscape_ord": "provider_competitive_landscape_type_code",  # zero-padded STRING '00'..'06'
     "cable_penetration": "cable_penetration",
     "fiber_opportunity_gap": "fiber_opportunity_gap",
     "fiber_speed_top_tier": "fiber_speed_top_tier",
