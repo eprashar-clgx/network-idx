@@ -11,8 +11,8 @@ Source: {GCS_PROJECT_ID}.{BQ_DATASET_FEATURES}.{BQ_TABLE_ALL_FEATURES_TRACT}
 Output: {GCS_PROJECT_ID}.{BQ_DATASET_ANALYTICS}.{BQ_FEATURES_ENGG_TRACT}
 
 Usage:
-    python -m network_idx.feature_engg.all_feature_engg_tract_bq
-    python -m network_idx.feature_engg.all_feature_engg_tract_bq --dry-run
+    python -m network_idx.features_engg.all_feature_engg_tract_bq
+    python -m network_idx.features_engg.all_feature_engg_tract_bq --dry-run
 """
 
 import argparse

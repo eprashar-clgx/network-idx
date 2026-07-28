@@ -72,13 +72,11 @@ GROWTH_COLS = [
     "building_permit_count",
     "new_clip_count",
     "parcel_split_count",
-    "mean_dist_nearest_hotspot_m",
-    "median_dist_nearest_hotspot"
+    "median_dist_nearest_hotspot_miles"
 ]
 
 REXTAG_COLS = [
-    "mean_dist_nearest_fiber_m",
-    "median_dist_nearest_fiber_m",
+    "median_dist_nearest_fiber_miles",
     "mean_radius_fiber_count",
     "median_radius_fiber_count"
 ]

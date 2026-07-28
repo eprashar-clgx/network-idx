@@ -23,6 +23,7 @@ from network_idx.constants import (
     INVERTED_FEATURES,
     SCALING_NA_FILL_RULES,
     SCALING_CAP_AS_MAX,
+    SCALING_WINSORIZE_QUANTILE
 )
 
 logger = logging.getLogger(__name__)
@@ -30,6 +31,36 @@ logger = logging.getLogger(__name__)
 SCALING_PARAMS_COLUMNS = [
     "run_id", "feature", "na_fill", "min_val", "max_val", "invert", "created_at",
 ]
+
+def apply_feature_fills(df: pd.DataFrame, features=ALL_SCORING_FEATURES) -> pd.DataFrame:
+    """Apply the canonical NA-fills + winsorize caps to an in-memory frame, computing
+    data-derived caps on THIS frame's own distribution (same *policy* as
+    compute_scaling_params_bq, recomputed per grain). Use in the 04/05 notebooks so
+    training preprocessing matches src scoring exactly — one rule set, per-grain value.
+
+    Per feature: +/-inf -> NaN; winsorize (SCALING_CAP_AS_MAX cap, else
+    SCALING_WINSORIZE_QUANTILE); then fill NaN (cap for cap-as-max features, else the
+    constant in SCALING_NA_FILL_RULES).
+    """
+    out = df.copy()
+    for f in features:
+        if f not in out.columns:
+            raise KeyError(f"Feature '{f}' missing from frame; cannot apply fills.")
+        col = out[f].replace([np.inf, -np.inf], np.nan)
+        rule = SCALING_NA_FILL_RULES[f]
+        if f in SCALING_CAP_AS_MAX:
+            if rule == "p99":
+                cap = col.quantile(0.99)
+            elif rule == "max_x1.25":
+                cap = col.max() * 1.25
+            else:
+                raise ValueError(f"Unknown cap rule for {f}: {rule!r}")
+            out[f] = col.clip(upper=cap).fillna(cap)
+        else:
+            if f in SCALING_WINSORIZE_QUANTILE:
+                col = col.clip(upper=col.quantile(SCALING_WINSORIZE_QUANTILE[f]))
+            out[f] = col.fillna(float(rule))
+    return out
 
 
 def build_stats_query(source_table: str) -> str:

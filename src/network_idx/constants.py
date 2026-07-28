@@ -445,14 +445,14 @@ GROWTH_FEATURES = [
     "pre_early_dev_qtr_mi_cnt",
     "bldr_dev_qtr_mi_cnt",
     "new_permit_qtr_mi_cnt",
-    "dist_to_nearest_hotspot_m",
+    "dist_to_nearest_hotspot_miles",
 ]
 
 TELECOM_FEATURES = [
     "cable_penetration",
     "fiber_opportunity_gap",
     "fiber_speed_top_tier",
-    "dist_to_nearest_fiber_m",
+    "dist_to_nearest_fiber_miles",
     "provider_competitive_landscape_ord",
 ]
 
@@ -481,8 +481,8 @@ SCORING_BUCKET_WEIGHTS = {
 
 # Features where a LOWER raw value means a HIGHER opportunity score (invert on scaling).
 INVERTED_FEATURES = {
-    "dist_to_nearest_hotspot_m",
-    "dist_to_nearest_fiber_m",
+    "dist_to_nearest_hotspot_miles",
+    "dist_to_nearest_fiber_miles",
     "cable_penetration",
     "fiber_speed_top_tier",
     "provider_competitive_landscape_ord",
@@ -519,11 +519,11 @@ SCALING_NA_FILL_RULES = {
     "pre_early_dev_qtr_mi_cnt": 0.0,
     "bldr_dev_qtr_mi_cnt": 0.0,
     "new_permit_qtr_mi_cnt": 0.0,
-    "dist_to_nearest_hotspot_m": "max_x1.25",
+    "dist_to_nearest_hotspot_miles": "max_x1.25",
     "cable_penetration": 0.0,
     "fiber_opportunity_gap": 1.0,
     "fiber_speed_top_tier": 0.0,
-    "dist_to_nearest_fiber_m": "p99",
+    "dist_to_nearest_fiber_miles": "p99",
     "provider_competitive_landscape_ord": 0.0,
     "pop_ch_avg": 0.0,
     "pop_pctch_avg": 0.0,
@@ -534,8 +534,17 @@ SCALING_NA_FILL_RULES = {
 # values above the cap clip to it, and NA-filled rows sit exactly at the cap
 # (scaled = 1 -> inverted score = 0, i.e. "far / unknown = lowest opportunity").
 SCALING_CAP_AS_MAX = {
-    "dist_to_nearest_fiber_m",
-    "dist_to_nearest_hotspot_m",
+    "dist_to_nearest_fiber_miles",
+    "dist_to_nearest_hotspot_miles",
+}
+
+# Upper winsorize caps that are NOT the NA fill (fill stays per SCALING_NA_FILL_RULES).
+# Growth counts have a fat right tail; the model was trained winsorized at P99.5.
+SCALING_WINSORIZE_QUANTILE = {
+    "landuse_change_qtr_mi_cnt": 0.995,
+    "pre_early_dev_qtr_mi_cnt": 0.995,
+    "bldr_dev_qtr_mi_cnt": 0.995,
+    "new_permit_qtr_mi_cnt": 0.995,
 }
 
 # Maps trained-model feature names → parcel_features canonical column names.
@@ -545,8 +554,8 @@ MODEL_TO_SCORING_FEATURE = {
     "median_pre_early_dev_qtr_mi_cnt": "pre_early_dev_qtr_mi_cnt",
     "median_bldr_dev_qtr_mi_cnt": "bldr_dev_qtr_mi_cnt",
     "median_new_permit_qtr_mi_cnt": "new_permit_qtr_mi_cnt",
-    "median_dist_nearest_hotspot": "dist_to_nearest_hotspot_m",
-    "median_dist_nearest_fiber_m": "dist_to_nearest_fiber_m",
+    "median_dist_nearest_hotspot_miles": "dist_to_nearest_hotspot_miles",
+    "median_dist_nearest_fiber_miles": "dist_to_nearest_fiber_miles",
     "estimated_census_housing_units": "census_housing_units",
     # telecom + pop_ch/pctch names already match — identity
 }
@@ -561,8 +570,8 @@ DELIVERY_FEATURE_NAMES = {
     "bldr_dev_qtr_mi_cnt": "bldr_dev_qtr_mi_cnt",
     "landuse_change_qtr_mi_cnt": "landuse_change_qtr_mi_cnt",
     "new_permit_qtr_mi_cnt": "new_permit_qtr_mi_cnt",
-    "dist_to_nearest_hotspot_m": "dist_nearest_hotspot",   # raw kept in METERS (see QA)
-    "dist_to_nearest_fiber_m": "dist_nearest_fiber",       # raw kept in METERS (see QA)
+    "dist_to_nearest_hotspot_miles": "dist_nearest_hotspot",   
+    "dist_to_nearest_fiber_miles": "dist_nearest_fiber",       
     "provider_competitive_landscape_ord": "provider_competitive_landscape",  # emitted as STRING
     "cable_penetration": "cable_penetration",
     "fiber_opportunity_gap": "fiber_opportunity_gap",
