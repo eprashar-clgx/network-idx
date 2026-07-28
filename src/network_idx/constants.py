@@ -566,6 +566,8 @@ MODEL_TO_SCORING_FEATURE = {
     "median_pre_early_dev_qtr_mi_cnt": "pre_early_dev_qtr_mi_cnt",
     "median_bldr_dev_qtr_mi_cnt": "bldr_dev_qtr_mi_cnt",
     "median_new_permit_qtr_mi_cnt": "new_permit_qtr_mi_cnt",
+    "median_dist_nearest_hotspot": "dist_to_nearest_hotspot_miles",
+    "median_dist_nearest_fiber_m": "dist_to_nearest_fiber_miles",
     "median_dist_nearest_hotspot_miles": "dist_to_nearest_hotspot_miles",
     "median_dist_nearest_fiber_miles": "dist_to_nearest_fiber_miles",
     "estimated_census_housing_units": "census_housing_units",
