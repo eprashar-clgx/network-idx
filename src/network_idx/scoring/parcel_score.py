@@ -227,7 +227,7 @@ def build_delivery_query(
     cols.append("g.parcel_polygon AS geometry")
     cols.append("pf.block_geoid AS census_block_id")
     cols.append("g.h3_res8 AS h3_id")
-    cols.append("pf.nearest_fiber_id")
+    cols.append("CAST(pf.nearest_fiber_id AS STRING) AS nearest_fiber_id")
 
     # indices (0-100) -> 2 dp
     cols.append(f"ROUND(ps.idx_demo, {ROUND_INDEX}) AS demographic_index")
