@@ -9,7 +9,8 @@ BigQuery query that:
   2. forms each sub-index as the within-bucket weighted sum of scaled features
      (raw 0..1);
   3. min-max rescales each sub-index to 0..100 over the full population;
-  4. idx_overall = Σ_bucket bucket_weight · idx_bucket   (weighted avg of sub-indices).
+  4. idx_overall = Σ_bucket bucket_weight · idx_bucket   (weighted avg of sub-indices) 
+  5. Rescale the idx_overall to 0-100  
 
 Output: {GCS_PROJECT_ID}.{BQ_DATASET_OUTPUTS}.{BQ_TABLE_PARCEL_SCORES}
 
@@ -126,14 +127,19 @@ def build_scoring_query(
     raw_telecom = _bucket_raw_expr("telecom", params_by_feat, w_in_bucket)
     raw_demo = _bucket_raw_expr("demo", params_by_feat, w_in_bucket)
 
+    # overall = bucket-weighted sum of the 0-100 sub-indices, built from the SAME bw
+    # dict used everywhere else (no hard-coded weights), then min-max rescaled to
+    # 0-100 over the population — same pattern as the per-bucket rescale above.
+    overall_expr = (f"{_f(bw['growth'])} * idx_growth"
+                    f" + {_f(bw['telecom'])} * idx_telecom"
+                    f" + {_f(bw['demo'])} * idx_demo")
+
     return f"""\
 CREATE OR REPLACE TABLE `{output_table}`
 CLUSTER BY block_geoid AS
 WITH subidx AS (
   SELECT
-    parcel_shape_id,
-    block_geoid,
-    tract_geoid,
+    parcel_shape_id, block_geoid, tract_geoid,
     {raw_growth} AS raw_growth,
     {raw_telecom} AS raw_telecom,
     {raw_demo} AS raw_demo
@@ -157,21 +163,27 @@ rescaled AS (
     CASE WHEN (b.d_max - b.d_min) > 0
          THEN 100.0 * (s.raw_demo - b.d_min) / (b.d_max - b.d_min) ELSE 0.0 END AS idx_demo
   FROM subidx s CROSS JOIN bounds b
+),
+overall AS (
+  SELECT *, ({overall_expr}) AS raw_overall FROM rescaled
+),
+obounds AS (
+  SELECT MIN(raw_overall) AS o_min, MAX(raw_overall) AS o_max FROM overall
 )
 SELECT
-  parcel_shape_id, block_geoid, tract_geoid,
-  ROUND(raw_growth, {ROUND_VALUE}) AS raw_growth,
-  ROUND(raw_telecom, {ROUND_VALUE}) AS raw_telecom,
-  ROUND(raw_demo, {ROUND_VALUE}) AS raw_demo,
-  ROUND(idx_growth, {ROUND_INDEX}) AS idx_growth,
-  ROUND(idx_telecom, {ROUND_INDEX}) AS idx_telecom,
-  ROUND(idx_demo, {ROUND_INDEX}) AS idx_demo,
-  ROUND({_f(bw['growth'])} * idx_growth
-        + {_f(bw['telecom'])} * idx_telecom
-        + {_f(bw['demo'])} * idx_demo, {ROUND_INDEX}) AS idx_overall,
+  o.parcel_shape_id, o.block_geoid, o.tract_geoid,
+  ROUND(o.raw_growth, {ROUND_VALUE}) AS raw_growth,
+  ROUND(o.raw_telecom, {ROUND_VALUE}) AS raw_telecom,
+  ROUND(o.raw_demo, {ROUND_VALUE}) AS raw_demo,
+  ROUND(o.idx_growth, {ROUND_INDEX}) AS idx_growth,
+  ROUND(o.idx_telecom, {ROUND_INDEX}) AS idx_telecom,
+  ROUND(o.idx_demo, {ROUND_INDEX}) AS idx_demo,
+  ROUND(CASE WHEN (ob.o_max - ob.o_min) > 0
+             THEN 100.0 * (o.raw_overall - ob.o_min) / (ob.o_max - ob.o_min)
+             ELSE 0.0 END, {ROUND_INDEX}) AS idx_overall,
   '{run_id}' AS run_id,
   CURRENT_TIMESTAMP() AS created_at
-FROM rescaled
+FROM overall o CROSS JOIN obounds ob
 """
 
 def _filled_raw_expr(feature: str, lo: float, hi: float, na_fill: float, alias: str) -> str:
