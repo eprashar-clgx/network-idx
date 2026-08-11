@@ -60,7 +60,13 @@ logger = logging.getLogger(__name__)
 ROUND_INDEX = 2   # 0-100 indices & sub-indices
 ROUND_VALUE = 4   # 0-1 scaled, weights, raw feature floats, raw sub-index sums
 NUMERIC_BQ_TYPES = {"INTEGER", "INT64", "FLOAT", "FLOAT64", "NUMERIC", "BIGNUMERIC"}
-INTEGER_RAW_FEATURES = {"census_housing_units"}  # don't ROUND (would coerce INT->FLOAT)
+INTEGER_RAW_FEATURES = {
+    "census_housing_units",
+    "landuse_change_qtr_mi_cnt",
+    "pre_early_dev_qtr_mi_cnt",
+    "bldr_dev_qtr_mi_cnt",
+    "new_permit_qtr_mi_cnt"
+    }  # don't ROUND (would coerce INT->FLOAT)
 INDEX_COLUMNS = ["demographic_index", "growth_index", "telecom_index", "fiber_potential_index"]
 INDEX_BINS = [0, 25, 50, 75, 100]  # fixed score bands; last band is inclusive of 100
 ROUND_WEIGHT = 2   # weights emitted as PERCENTAGES (0-100), display-only
