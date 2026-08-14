@@ -30,11 +30,32 @@ BQ_TABLE_FCC_COVERAGE_FEATURES_TRACT = "fcc_fixed_coverage_ct"
 BQ_TABLE_FCC_SPEEDS_FEATURES_TRACT = "fcc_fixed_speeds_ct"
 BQ_TABLE_FCC_COVERAGE_FEATURES_TRACT_BUCKETED = "fcc_fixed_coverage_ct_bucketed_speeds"
 
+# ── Raw production sources (BigQuery-prod, authoritative; cross-project) ───────
+# For the FCC and demographic families the authoritative raw data lives in the
+# BigQuery production project, and the pipeline reads it from there rather than
+# from local downloads. These are the physical locations the sources adapter
+# reads; the sources registry maps each logical source name to one of them.
+BQ_PROJECT_PROD = os.getenv("BQ_PROJECT_PROD", "clgx-idap-bigquery-prd-a990")
+
+# FCC fixed broadband (raw) — dataset edr_ent_common_reference_ext.
+BQ_PROD_DATASET_FCC = "edr_ent_common_reference_ext"
+BQ_PROD_TABLE_FCC_COPPER = "fcc_copper_fixed_broadband"
+BQ_PROD_TABLE_FCC_CABLE = "fcc_cable_fixed_broadband"
+BQ_PROD_TABLE_FCC_FIBER = "fcc_fiber_fixed_broadband"
+BQ_PROD_TABLE_FCC_GEOGRAPHY = "fcc_fixed_broadband_geography"
+BQ_PROD_TABLE_FCC_SUMMARY = "fcc_fixed_broadband_summary_census"
+
+# Demographic (raw) — NeighborhoodScout census-tract table and the tract geometry view.
+BQ_PROD_DATASET_NEIGHBORHOOD = "edr_ent_property_neighborhood"
+BQ_PROD_TABLE_NEIGHBORHOOD_SCOUT_CT = "neighborhood_scout_census_tract"
+BQ_PROD_DATASET_REFERENCE = "edr_ent_common_reference_data"
+BQ_PROD_VIEW_TRACT_GEOMETRY = "vw_country_boundary_sdp_us_census_tract"
+
 # ── Demographics / population ─────────────────────────────────────────────────
 BQ_TABLE_DEMO_POP_TRACT = "demo_pop_ct"
 BQ_SOURCE_NEIGHBORHOOD_SCOUT_CT = os.getenv(
     "BQ_SOURCE_NEIGHBORHOOD_SCOUT_CT",
-    "",
+    f"{BQ_PROJECT_PROD}.{BQ_PROD_DATASET_NEIGHBORHOOD}.{BQ_PROD_TABLE_NEIGHBORHOOD_SCOUT_CT}",
 )
 
 # ── Other source tables ───────────────────────────────────────────────────────
