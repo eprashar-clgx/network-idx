@@ -10,8 +10,8 @@ Filename pattern on Census FTP:
 Strategy: try December 2025 (122025) first; fall back to July 2025 (072025).
 
 Usage:
-    python -m network_idx.data.census_addresscountlisting --states AL CA NY
-    python -m network_idx.data.census_addresscountlisting --all
+    python -m network_idx.sources.data_download.census_addresscountlisting --states AL CA NY
+    python -m network_idx.sources.data_download.census_addresscountlisting --all
 """
 
 import argparse

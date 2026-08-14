@@ -9,13 +9,13 @@ Geography types:
 
 Usage:
     # Download Census Place files for specific states
-    python -m network_idx.data.fcc_fixed_summary --geography census-place --states Alabama Alaska
+    python -m network_idx.sources.data_download.fcc_fixed_summary --geography census-place --states Alabama Alaska
 
     # Download Census Place files for all states
-    python -m network_idx.data.fcc_fixed_summary --geography census-place --all
+    python -m network_idx.sources.data_download.fcc_fixed_summary --geography census-place --all
 
     # Download the Other Geographies file (county, congressional district, etc.)
-    python -m network_idx.data.fcc_fixed_summary --geography other
+    python -m network_idx.sources.data_download.fcc_fixed_summary --geography other
 """
 
 import argparse

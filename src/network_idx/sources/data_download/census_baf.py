@@ -10,10 +10,10 @@ URL pattern:
 
 Usage:
     # Download for specific states
-    python -m network_idx.data.census_baf --states AL CA NY
+    python -m network_idx.sources.data_download.census_baf --states AL CA NY
 
     # Download for all states
-    python -m network_idx.data.census_baf --all
+    python -m network_idx.sources.data_download.census_baf --all
 """
 
 import argparse
