@@ -12,10 +12,9 @@ them locally. The physical identifiers themselves come from the config package, 
 this registry stays a thin logical-to-physical map.
 
 Location raw sources are the in-house property-pipeline production views the growth
-features read from; they are registered here alongside the FCC and demographic
-sources. Rextag raw sources are an in-house pipeline whose raw identifiers have not
-been wired in yet; they are intentionally left out of the registry for now and
-tracked as a to-do.
+features read from; rextag raw is the fiber-optic cable geometry view the
+fiber-optimize transform reads. Both are registered here alongside the FCC and
+demographic sources.
 """
 from dataclasses import dataclass
 
@@ -100,6 +99,12 @@ RAW_SOURCES_BQ = {
         config.BQ_PROJECT_PROD,
         config.BQ_PROD_DATASET_REFERENCE,
         config.BQ_PROD_VIEW_BLOCK_GEOMETRY,
+    ),
+    # Rextag — the raw fiber-optic cable geometry view.
+    "rextag_fiber": BQSource(
+        config.BQ_PROJECT_PROD,
+        config.BQ_PROD_DATASET_REXTAG,
+        config.BQ_PROD_VIEW_REXTAG_FIBER,
     ),
 }
 

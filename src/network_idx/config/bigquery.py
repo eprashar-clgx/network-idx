@@ -69,6 +69,13 @@ BQ_PROD_VIEW_PROPERTY = "vw_property_v1"
 # location growth features (H3_FROMGEOGPOINT, H3_BOUNDARY).
 BQ_PROJECT_CARTO = os.getenv("BQ_PROJECT_CARTO", "carto-os")
 
+# Rextag (raw) — the fiber-optic cable geometry view. The fiber-optimize transform
+# reads this prod view directly. NOTE: the dataset is a best guess pending
+# confirmation with the data engineer; override with BQ_PROD_DATASET_REXTAG if it
+# differs.
+BQ_PROD_DATASET_REXTAG = os.getenv("BQ_PROD_DATASET_REXTAG", "edr_ent_common_reference_ext")
+BQ_PROD_VIEW_REXTAG_FIBER = "vw_rextag_telecommunications_fiber_optic_cables"
+
 # ── Demographics / population ─────────────────────────────────────────────────
 BQ_TABLE_DEMO_POP_TRACT = "demo_pop_ct"
 BQ_SOURCE_NEIGHBORHOOD_SCOUT_CT = os.getenv(
@@ -79,8 +86,20 @@ BQ_SOURCE_NEIGHBORHOOD_SCOUT_CT = os.getenv(
 # ── Other source tables ───────────────────────────────────────────────────────
 BQ_TABLE_LOC_PARCELS_GROWTH_CT = "loc_parcels_growth_ct"
 BQ_TABLE_REXTAG_DISTANCE_CT = "rextag_distance_ct"
-BQ_DATASET_BOUNDARY = "boundary"
+# The boundary dataset holds optimised boundary tables and the spatial helper UDFs
+# (for example st_subdivide16 used by the fiber-optimize transform). It lives in the
+# active project, so only the dataset name is configured.
+BQ_DATASET_BOUNDARY = os.getenv("BQ_DATASET_BOUNDARY", "boundary")
 BQ_TABLE_CENSUS_TRACT_BOUNDARY = "census_tract_optimized"
+
+# ── Rextag (fiber) intermediate tables ────────────────────────────────────────
+# The fiber-optimize transform writes the cleaned, subdivided fiber geometry here,
+# in the telecom intermediate dataset.
+BQ_DATASET_TELECOM = os.getenv("BQ_DATASET_TELECOM", "teu_telecom")
+BQ_TABLE_REXTAG_FIBER_OPTIMIZED = "int_rextag_fiberopticcables_optimized"
+# The distance worker appends its sharded, in-metres calculations to this staging
+# table; the assemble step turns it into the final parcel table below.
+BQ_TABLE_REXTAG_CALCULATION_PARCEL = "rextag_calculation_parcel"
 
 # Connecticut tract crosswalk (2020 GEOID → current GEOID)
 GCS_CT_CROSSWALK_PATH = "gs://geospatial-projects/location_inc/spatial/us/tiger/2022/connecticut_ct_crosswalk.csv"
@@ -99,7 +118,7 @@ BQ_DATASET_OUTPUTS = os.getenv("BQ_DATASET_OUTPUTS", "teu_outputs")
 # teu_features — source parcel tables (join spine + distances)
 BQ_TABLE_PARCEL_GROWTH = os.getenv("BQ_TABLE_PARCEL_GROWTH", "loc_growth_cnts_parcel")
 BQ_TABLE_HOTSPOT_CONCENTRATIONS_H3 = "loc_growth_parcel_concentrations_h3r7"  # H3-r7 growth hotspots
-BQ_TABLE_REXTAG_DISTANCE_PARCEL = "rextag_distance_parcel"       # dist_to_nearest_fiber_m
+BQ_TABLE_REXTAG_DISTANCE_PARCEL = "rextag_distance_parcel"       # dist_to_nearest_fiber_miles (+ radius_fiber_count, nearest_fiber_id)
 BQ_TABLE_HOTSPOT_DISTANCE_PARCEL = "loc_growth_distance_parcel"  # dist_to_nearest_hotspot_miles
 
 # teu_features — feature tables
