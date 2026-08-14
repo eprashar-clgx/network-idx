@@ -392,7 +392,7 @@ data-contract coverage.
 | `fiber_idx_v1_parcel` | `teu_outputs` | parcel | **Persist** (delivery) | High |
 | `fiber_idx_v1_parcel_qa_minmax`, `..._qa_fillrates`, `..._qa_index_buckets` | `teu_outputs` | summary | Persist (QA) | Med |
 
-### 8.3 Open questions for the data engineer
+### 8.3 Data Engineering Questions
 
 1. **Env materialization** — Which tiers are materialized in dev vs staging vs prod? Proposal:
    Transient tables live in dev only; Persist tables are promoted dev → staging → prod once
