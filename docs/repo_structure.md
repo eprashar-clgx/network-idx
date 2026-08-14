@@ -39,7 +39,7 @@ flowchart LR
 | Module | One-line purpose | Cadence |
 | --- | --- | --- |
 | `sources` | Ingest raw data behind adapters (ADR-0003) | per refresh |
-| `processing` | Reshape raw → **one canonical block-level frame** | per refresh |
+| `processing` | Reshape the still-downloaded **Census** data → block tables (ADR-0006) | per refresh |
 | `features` | Build features per **source family**, in `transform` + `engineered` layers | per refresh |
 | `grain_transfer` | Move features across grains (aggregate-up / broadcast-down) | per refresh |
 | `modeling` | Derive scoring rules: `train` + `fit_scoring_rules` (ADR-0002) | model ≪ data |
@@ -68,20 +68,17 @@ src/network_idx/
 │       ├── fcc_fixed_summary.py  # FCC download — backfill only
 │       └── fcc_fixed_speeds.py   # FCC download — backfill only
 │
-├── processing/               # → ONE canonical block-level frame (copper/fiber/cable cols)
-│   ├── block_frame.py        #   build_block_frame() -> wide, one row per block
-│   ├── census_baf.py
-│   ├── census_addresscountlisting.py
-│   ├── fcc_fixed_speeds.py
-│   └── fcc_fixed_summary.py
+├── processing/               # Census-only reshapes (still download-dependent) — ADR-0006
+│   ├── census_baf.py             # block → state/county/tract/place crosswalk
+│   └── census_addresscountlisting.py  # housing units per block
 │
 ├── features/                 # split by SOURCE FAMILY; two layers per family
 │   ├── parcel_features.py     # assemble family outputs → parcel-grain feature frame
 │   │   (+ parcel_features.sql)#   (the scoring input: 13 features @ parcel)
 │   ├── telecom/
-│   │   ├── transform/         # BATCH 1 — dasymetric interpolation, block/tract cuts, pivots
-│   │   │   ├── fcc_coverage_block.py  (+ .sql)
-│   │   │   └── fcc_speeds_block.py
+│   │   ├── transform/         # BATCH 1 — FCC raw (BQ-prod) reshaped to block; no analytical choice
+│   │   │   ├── fcc_fixed_speeds.py    # pivot → one wide block row (copper/cable/fiber)
+│   │   │   └── fcc_fixed_summary.py   # coverage reshape + dasymetric interpolation → block
 │   │   └── engineered/        # BATCH 2 — penetration, opportunity gap, landscape ord, top-tier
 │   │       └── telecom_features_block.py (+ .sql)
 │   ├── demographic/           # tract-native; pop_ch_avg / pop_pctch_avg (5-yr), housing units
@@ -139,8 +136,8 @@ flowchart TD
     end
     GATE{{Data Validation — monitoring.data_contract<br/>schema · nulls · anomalies · row counts}}
     subgraph PREP["Data Preparation — processing + features + grain_transfer"]
-        PROC[processing.build_block_frame<br/>canonical block frame]
-        FT[features.*.transform<br/>batch-1 reshapes]
+        PROC[processing<br/>Census block tables]
+        FT[features.*.transform<br/>batch-1 reshapes<br/>incl. FCC pivot/interp]
         FE[features.*.engineered<br/>batch-2 features]
         GTn[grain_transfer.promote<br/>up-agg / down-broadcast]
         PF[features.parcel_features<br/>13 feats @ parcel]
@@ -183,8 +180,8 @@ held-out accuracy — ADR-0004) · Model Registration→**run registry**.
 | Pull raw (prod) | `sources/bq_prod.py` | native | FCC/demo/location/rextag from BQ (ADR-0003) |
 | Pull raw (dev/backfill) | `sources/data_download/*` | native | Census always; FCC/others for backfill |
 | Input gate | `monitoring/data_contract.py` | — | halt+alert on schema/null/anomaly (Q12) |
-| Canonical block frame | `processing/block_frame.py` | block | one wide frame, copper/fiber/cable cols |
-| Dasymetric interpolation, block/tract cuts | `features/telecom/transform/*` | block/tract | **Transformed** features (batch 1) |
+| Census block tables | `processing/census_*.py` | block | BAF crosswalk + ACL housing units (ADR-0006) |
+| FCC pivot + dasymetric interpolation | `features/telecom/transform/*` | block | **Transformed** features (batch 1); reads FCC from BQ-prod |
 | Penetration, gap, landscape ord, top-tier | `features/telecom/engineered/*` | block | **Engineered** features (batch 2) |
 | Demographic pop-change (5-yr avg) | `features/demographic/*` | tract | broadcast down to parcel |
 | Growth counts, hotspot distance | `features/location/engineered/*` | parcel | aggregate up to block/tract for tract branch |
