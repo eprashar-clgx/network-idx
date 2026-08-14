@@ -50,6 +50,40 @@ flowchart LR
 
 ¹ Proposed — not yet materialized in BigQuery (currently local parquet). See §8.
 
+### 1.1 `transform` vs `engineered` — the litmus test
+
+Every feature family splits into two layers. The dividing line is **analytical
+choice**, not complexity or code volume:
+
+- **`transform`** — a *deterministic reshape* of the raw source to its native grain:
+  pivoting, dasymetric interpolation, grain cuts, renames, deduplication. No
+  judgment is encoded. Given the raw schema, **two engineers would independently
+  produce the identical output**, and the result is fully reproducible from the
+  source alone.
+- **`engineered`** — *feature definitions chosen during exploratory analysis*:
+  thresholds, baseline windows, derived quantities, null-fill and winsorising rules.
+  These did **not** exist in the raw data and encode modeling judgment; a different
+  analyst could reasonably have chosen differently.
+
+**Litmus test:** *"Would two engineers independently produce the identical output?"*
+Yes → `transform`. It encodes an EDA-chosen definition → `engineered`.
+
+Worked examples:
+- **demographic / `population_change`** → *engineered*: bakes in the "since 2022"
+  baseline, annualisation, the Q3 reference quarter, and which change quantities to
+  emit. The raw only has `pop_est_10mile` by year/quarter.
+- **location / growth features** → *engineered*: the `is_growth_parcel` rule, the
+  ¼-mile count radius, hotspot thresholds (50 flags / variety 10), H3 resolution 7,
+  and the 15-mile search cap are all analytical choices absent from the raw parcel
+  views.
+- **telecom** → has *both*: county→block dasymetric interpolation and the
+  copper/cable/fiber pivot are `transform`; `cable_penetration`,
+  `fiber_opportunity_gap`, and `provider_competitive_landscape` are `engineered`.
+
+A family whose source already arrives at its native grain and jumps straight to
+EDA-chosen definitions (demographic, location) has an **intentionally empty
+`transform` layer**.
+
 ---
 
 ## 2. Target `src/network_idx` tree

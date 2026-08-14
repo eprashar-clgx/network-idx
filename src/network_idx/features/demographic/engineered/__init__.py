@@ -1,1 +1,1 @@
-"""Engineered features for the demographic family: feature definitions that were chosen during exploratory analysis and are then computed deterministically from the transformed features."""
+"""Engineered features for the demographic family: feature definitions chosen during exploratory analysis and then computed deterministically. Because the demographic transform layer is intentionally empty (NeighborhoodScout already arrives at the census-tract grain), these are computed directly from the tract-native source read through the source registry."""
