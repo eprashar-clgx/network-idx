@@ -10,7 +10,7 @@ module spine, the data flow, and — most importantly — **where each piece of 
   (0001), modeling two-interface seam (0002), BigQuery-prod source-of-truth (0003),
   composite-indicator validation stance (0004).
 - The previous (current-state) description is preserved at
-  [`repo_structure.prev.md`](./repo_structure.prev.md) during migration.
+  [`repo_structure.prev.md`](docs/archive/repo_structure.prev.md) during migration.
 
 ---
 
