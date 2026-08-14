@@ -11,8 +11,10 @@ which are still fetched from the Census website) point at the command that produ
 them locally. The physical identifiers themselves come from the config package, so
 this registry stays a thin logical-to-physical map.
 
-Location and rextag raw sources are in-house pipelines whose raw identifiers have
-not been wired in yet; they are intentionally left out of the registry for now and
+Location raw sources are the in-house property-pipeline production views the growth
+features read from; they are registered here alongside the FCC and demographic
+sources. Rextag raw sources are an in-house pipeline whose raw identifiers have not
+been wired in yet; they are intentionally left out of the registry for now and
 tracked as a to-do.
 """
 from dataclasses import dataclass
@@ -67,6 +69,37 @@ RAW_SOURCES_BQ = {
         config.BQ_PROJECT_PROD,
         config.BQ_PROD_DATASET_REFERENCE,
         config.BQ_PROD_VIEW_TRACT_GEOMETRY,
+    ),
+    # Location — in-house property-pipeline production views.
+    "parcel_universe": BQSource(
+        config.BQ_PROJECT_PROD,
+        config.BQ_PROD_DATASET_PROPERTY_PIPELINE,
+        config.BQ_PROD_VIEW_PARCEL_UNIVERSE,
+    ),
+    "clip_to_parcel": BQSource(
+        config.BQ_PROJECT_PROD,
+        config.BQ_PROD_DATASET_PROPERTY_PIPELINE,
+        config.BQ_PROD_VIEW_CLIP_TO_PARCEL,
+    ),
+    "parcel_lineage_event": BQSource(
+        config.BQ_PROJECT_PROD,
+        config.BQ_PROD_DATASET_PROPERTY_PIPELINE,
+        config.BQ_PROD_VIEW_PARCEL_LINEAGE_EVENT,
+    ),
+    "growth_indicators": BQSource(
+        config.BQ_PROJECT_PROD,
+        config.BQ_PROD_DATASET_PROPERTY_ENRICHED,
+        config.BQ_PROD_VIEW_GROWTH_INDICATORS,
+    ),
+    "property": BQSource(
+        config.BQ_PROJECT_PROD,
+        config.BQ_PROD_DATASET_PROPERTY_FULFILLMENT,
+        config.BQ_PROD_VIEW_PROPERTY,
+    ),
+    "block_geometry": BQSource(
+        config.BQ_PROJECT_PROD,
+        config.BQ_PROD_DATASET_REFERENCE,
+        config.BQ_PROD_VIEW_BLOCK_GEOMETRY,
     ),
 }
 

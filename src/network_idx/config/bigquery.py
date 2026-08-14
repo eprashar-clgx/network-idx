@@ -50,6 +50,24 @@ BQ_PROD_DATASET_NEIGHBORHOOD = "edr_ent_property_neighborhood"
 BQ_PROD_TABLE_NEIGHBORHOOD_SCOUT_CT = "neighborhood_scout_census_tract"
 BQ_PROD_DATASET_REFERENCE = "edr_ent_common_reference_data"
 BQ_PROD_VIEW_TRACT_GEOMETRY = "vw_country_boundary_sdp_us_census_tract"
+BQ_PROD_VIEW_BLOCK_GEOMETRY = "vw_country_boundary_sdp_us_census_block"
+
+# Location (raw) — in-house property-pipeline production views. The parcel growth
+# features read parcel geometry and lineage from the property pipeline, the growth
+# indicators from the enriched property views, current land use from the property
+# fulfilment views, and census-block geometry from the common reference data.
+BQ_PROD_DATASET_PROPERTY_PIPELINE = "edr_pmd_property_pipeline"
+BQ_PROD_VIEW_PARCEL_UNIVERSE = "vw_parcel_universe"
+BQ_PROD_VIEW_CLIP_TO_PARCEL = "vw_clip_to_parcel"
+BQ_PROD_VIEW_PARCEL_LINEAGE_EVENT = "vw_parcel_lineage_event"
+BQ_PROD_DATASET_PROPERTY_ENRICHED = "edr_ent_property_enriched"
+BQ_PROD_VIEW_GROWTH_INDICATORS = "vw_edr_panoramiq_growth_indicators_v2"
+BQ_PROD_DATASET_PROPERTY_FULFILLMENT = "edr_ent_property_fulfillment"
+BQ_PROD_VIEW_PROPERTY = "vw_property_v1"
+
+# Carto spatial-analytics project that hosts the H3 helper functions used by the
+# location growth features (H3_FROMGEOGPOINT, H3_BOUNDARY).
+BQ_PROJECT_CARTO = os.getenv("BQ_PROJECT_CARTO", "carto-os")
 
 # ── Demographics / population ─────────────────────────────────────────────────
 BQ_TABLE_DEMO_POP_TRACT = "demo_pop_ct"
@@ -80,8 +98,9 @@ BQ_DATASET_OUTPUTS = os.getenv("BQ_DATASET_OUTPUTS", "teu_outputs")
 
 # teu_features — source parcel tables (join spine + distances)
 BQ_TABLE_PARCEL_GROWTH = os.getenv("BQ_TABLE_PARCEL_GROWTH", "loc_growth_cnts_parcel")
+BQ_TABLE_HOTSPOT_CONCENTRATIONS_H3 = "loc_growth_parcel_concentrations_h3r7"  # H3-r7 growth hotspots
 BQ_TABLE_REXTAG_DISTANCE_PARCEL = "rextag_distance_parcel"       # dist_to_nearest_fiber_m
-BQ_TABLE_HOTSPOT_DISTANCE_PARCEL = "loc_growth_distance_parcel"  # dist_to_nearest_hotspot_m
+BQ_TABLE_HOTSPOT_DISTANCE_PARCEL = "loc_growth_distance_parcel"  # dist_to_nearest_hotspot_miles
 
 # teu_features — feature tables
 BQ_TABLE_TELECOM_FEATURES_BLOCK = "telecom_features_block"  # derived telecom features @ block
