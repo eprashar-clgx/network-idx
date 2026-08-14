@@ -1,7 +1,7 @@
-# tests/processing/test_fcc_fixed_speeds.py
+# tests/features/telecom/transform/test_fcc_fixed_speeds.py
 import zipfile
 import pytest
-from network_idx.processing.fcc_fixed_speeds import (
+from network_idx.features.telecom.transform.fcc_fixed_speeds import (
     parse_fips_from_filename,
     get_fips_from_dir,
     extract_zip_file,

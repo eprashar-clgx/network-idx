@@ -31,16 +31,16 @@ Output files (in data/processed/fcc/speeds/):
 
 Usage:
     # Process a single state (default: AL)
-    python -m network_idx.processing.fcc_fixed_speeds
+    python -m network_idx.features.telecom.transform.fcc_fixed_speeds
 
     # Process specific states
-    python -m network_idx.processing.fcc_fixed_speeds --states AK AL CA
+    python -m network_idx.features.telecom.transform.fcc_fixed_speeds --states AK AL CA
 
     # Process all states
-    python -m network_idx.processing.fcc_fixed_speeds --all
+    python -m network_idx.features.telecom.transform.fcc_fixed_speeds --all
 
     # Overwrite existing parquet files
-    python -m network_idx.processing.fcc_fixed_speeds --all --overwrite
+    python -m network_idx.features.telecom.transform.fcc_fixed_speeds --all --overwrite
 """
 
 import argparse
