@@ -36,17 +36,19 @@ flowchart LR
   class MODEL,SCORE deep
 ```
 
-| Module | One-line purpose | Cadence |
-| --- | --- | --- |
-| `sources` | Ingest raw data behind adapters (ADR-0003) | per refresh |
-| `processing` | Reshape the still-downloaded **Census** data → block tables (ADR-0006) | per refresh |
-| `features` | Build features per **source family**, in `transform` + `engineered` layers | per refresh |
-| `grain_transfer` | Move features across grains (aggregate-up / broadcast-down) | per refresh |
-| `modeling` | Derive scoring rules: `train` + `fit_scoring_rules` (ADR-0002) | model ≪ data |
-| `scoring` | Apply frozen weights + scaling params → index + delivery | per refresh |
-| `monitoring` | Every-run health + data-contract gate + business rollups | every run |
-| `validation` | Periodic construct-validity dossier (ADR-0004) | periodic |
-| `config` / `constants` / `utils` | Shared configuration, the feature contract, helpers | — |
+| Module | One-line purpose | Cadence | Key output tables (dataset) |
+| --- | --- | --- | --- |
+| `sources` | Ingest raw data behind adapters (ADR-0003) | per refresh | *reads only* — FCC ×5 (`edr_ent_common_reference_ext`), NeighborhoodScout + tract geometry; Census BAF/ACL downloaded (not BQ) |
+| `processing` | Reshape the still-downloaded **Census** data → block tables (ADR-0006) | per refresh | `census_baf_block`, `census_acl_block` ¹ |
+| `features` | Build features per **source family**, in `transform` + `engineered` layers | per refresh | `fcc_fixed_speeds_block`, `fcc_coverage_block`, `telecom_features_block`; `demo_pop_ct`; `loc_growth_cnts_parcel`, `loc_growth_distance_parcel`; `rextag_distance_parcel` |
+| `grain_transfer` | Move features across grains (aggregate-up / broadcast-down) | per refresh | `fcc_fixed_speeds_ct`, `fcc_fixed_coverage_ct(_bucketed)`, `loc_parcels_growth_ct`, `rextag_distance_ct` → `all_features_tract` |
+| `modeling` | Derive scoring rules: `train` + `fit_scoring_rules` (ADR-0002) | model ≪ data | `feature_weights`, `scaling_params` (`teu_analytics`) |
+| `scoring` | Apply frozen weights + scaling params → index + delivery | per refresh | `parcel_features`, `parcel_scores`, `fiber_idx_v1_parcel` + 3 QA (`teu_outputs`) |
+| `monitoring` | Every-run health + data-contract gate + business rollups | every run | *reads outputs* → health/business rollups |
+| `validation` | Periodic construct-validity dossier (ADR-0004) | periodic | dossier (no persistent tables yet) |
+| `config` / `constants` / `utils` | Shared configuration, the feature contract, helpers | — | — |
+
+¹ Proposed — not yet materialized in BigQuery (currently local parquet). See §8.
 
 ---
 
@@ -257,3 +259,121 @@ they are.
 - [ ] Refresh `constants.py` weights + `parcel_scoring_qa.md` after the rewire and a full rerun.
 - [ ] Confirm distance-table units end-to-end (miles) once wiring is complete.
 - [ ] Start archiving per-`run_id` feature+score snapshots so the temporal axis (C) is possible.
+
+---
+
+## 8. Data-engineering discussion: tables to persist & test across environments
+
+> **Purpose.** A working agenda for the data-engineering conversation: which BigQuery
+> tables the pipeline **materializes** at each stage, which of those to **persist** as a
+> source of truth vs. treat as rebuildable intermediates, and which to put under
+> **data-contract tests** (schema, row counts, key uniqueness, null/fill rates).
+>
+> **Environment topology.** Separate GCP projects per environment (**dev / staging /
+> prod**). Every stage's datasets exist in each project; the open question below is
+> *which* tables are materialized and validated in *which* environment (e.g. transient
+> intermediates only in dev, contract-tested tables promoted to staging → prod).
+
+### 8.1 Pipeline stages annotated with the tables they produce
+
+```mermaid
+flowchart TB
+  SRC["<b>sources</b> — read-only (prod project)<br/>FCC ×5 · NeighborhoodScout · tract geometry<br/>+ Census BAF/ACL downloaded (files)"]
+  PROC["<b>processing</b> → block<br/>census_baf_block · census_acl_block ¹"]
+  FEAT["<b>features</b> (per source family)<br/>telecom @block: fcc_fixed_speeds_block, fcc_coverage_block, telecom_features_block<br/>demographic @tract: demo_pop_ct<br/>location @parcel: loc_growth_cnts_parcel, loc_growth_distance_parcel<br/>rextag @parcel: rextag_distance_parcel"]
+  GT["<b>grain_transfer</b> → tract (for modeling)<br/>fcc_fixed_speeds_ct · fcc_fixed_coverage_ct(_bucketed)<br/>loc_parcels_growth_ct · rextag_distance_ct → all_features_tract"]
+  MODEL["<b>modeling</b> (teu_analytics)<br/>feature_weights · scaling_params"]
+  SCORE["<b>scoring</b> → parcel (teu_outputs)<br/>parcel_features → parcel_scores → fiber_idx_v1_parcel + 3 QA"]
+  SRC --> PROC --> FEAT
+  FEAT --> GT --> MODEL
+  FEAT --> SCORE
+  MODEL -. weights + scaling_params (per run_id) .-> SCORE
+  SCORE --> DELIV[(fiber_idx_v1_parcel<br/>delivery)]
+```
+
+¹ Not yet materialized in BigQuery — see the open questions.
+
+### 8.2 Table inventory by stage
+
+Persist tier — **Raw** (external, read-only) · **Persist** (materialized source of truth for
+the next stage) · **Transient** (intermediate, rebuildable). Test priority is the suggested
+data-contract coverage.
+
+**Sources — raw, read-only (production project)**
+
+| Table | Dataset | Grain | Tier | Test |
+| --- | --- | --- | --- | --- |
+| `fcc_copper_fixed_broadband`, `fcc_cable_fixed_broadband`, `fcc_fiber_fixed_broadband` | `edr_ent_common_reference_ext` | location/block | Raw | High (input gate) |
+| `fcc_fixed_broadband_geography`, `fcc_fixed_broadband_summary_census` | `edr_ent_common_reference_ext` | block/geo | Raw | High |
+| `neighborhood_scout_census_tract` | `edr_ent_property_neighborhood` | tract | Raw | High |
+| `vw_country_boundary_sdp_us_census_tract` | `edr_ent_common_reference_data` | tract (geometry) | Raw | Med |
+| Census BAF, Census ACL | *downloaded files* | block | Raw (download) | Med |
+
+**Processing — Census → block**
+
+| Table | Dataset | Grain | Tier | Test |
+| --- | --- | --- | --- | --- |
+| `census_baf_block` ¹ | *TBD* | block | Persist? | High |
+| `census_acl_block` ¹ | *TBD* | block | Persist? | High |
+
+**Features — per source family**
+
+| Table | Dataset | Grain | Tier | Test |
+| --- | --- | --- | --- | --- |
+| `fcc_fixed_speeds_block` | `teu_telecom` | block | Persist | High |
+| `fcc_coverage_block` | `teu_telecom` | block | Persist | High |
+| `fcc_fixed_speeds_providers_block`, `fcc_fixed_speeds_providers_h3` | `teu_telecom` | block / h3 | Transient | Low |
+| `fcc_coverage_county_residuals` | `teu_telecom` | county | Transient | Low |
+| `telecom_features_block` | `teu_features` | block | Persist | High |
+| `demo_pop_ct` | `teu_features` | tract | Persist | High |
+| `loc_growth_cnts_parcel` | `teu_features` | parcel | Persist | High |
+| `loc_growth_distance_parcel`, `loc_growth_parcel_concentrations_h3r7` | `teu_features` | parcel / h3 | Persist / Transient | Med / Low |
+| `rextag_distance_parcel` | `teu_features` | parcel | Persist | High |
+
+**Grain transfer — → tract (modeling frame)**
+
+| Table | Dataset | Grain | Tier | Test |
+| --- | --- | --- | --- | --- |
+| `fcc_fixed_speeds_ct` | `teu_features` | tract | Persist | Med |
+| `fcc_fixed_coverage_ct`, `fcc_fixed_coverage_ct_bucketed_speeds` | `teu_features` | tract | Persist | Med |
+| `loc_parcels_growth_ct` | `teu_features` | tract | Persist | Med |
+| `rextag_distance_ct` | `teu_features` | tract | Persist | Med |
+| `all_features_tract` | `teu_features` | tract | **Persist** (modeling input) | High |
+
+**Modeling — analytics + artifacts**
+
+| Table | Dataset | Grain | Tier | Test |
+| --- | --- | --- | --- | --- |
+| `all_feature_engg_tract`, `post_corr_all_features_for_clustering_tract` | `teu_analytics` | tract | Transient (analysis) | Low |
+| `results_clustering_k8_tract` | `teu_analytics` | tract | Persist (analysis artifact) | Low |
+| `feature_weights` | `teu_analytics` | feature × run | **Persist** (key artifact) | High |
+| `scaling_params` | `teu_analytics` | feature × run | **Persist** (key artifact) | High |
+
+**Scoring — parcel + delivery**
+
+| Table | Dataset | Grain | Tier | Test |
+| --- | --- | --- | --- | --- |
+| `parcel_features` | `teu_features` | parcel | **Persist** (scoring input) | High |
+| `parcel_scores` | `teu_outputs` | parcel | Persist | High |
+| `fiber_idx_v1_parcel` | `teu_outputs` | parcel | **Persist** (delivery) | High |
+| `fiber_idx_v1_parcel_qa_minmax`, `..._qa_fillrates`, `..._qa_index_buckets` | `teu_outputs` | summary | Persist (QA) | Med |
+
+### 8.3 Open questions for the data engineer
+
+1. **Env materialization** — Which tiers are materialized in dev vs staging vs prod? Proposal:
+   Transient tables live in dev only; Persist tables are promoted dev → staging → prod once
+   contract tests pass. Confirm the promotion path and dataset naming per project.
+2. **Census block tables** — Persist `census_baf_block` / `census_acl_block` in BigQuery (which
+   dataset + names?), or keep them as parquet and only their downstream FCC-joined products in
+   BQ? This is the one gap where a "processing" output is not yet in BQ (ADR-0006).
+3. **Data-contract scope** — Which tables get the input gate (schema, row counts, key
+   uniqueness, null/fill thresholds) enforced as a hard halt vs. a soft alert? Raw FCC/demo and
+   `all_features_tract` / `parcel_features` are the High-priority candidates.
+4. **Run versioning & retention** — `feature_weights`, `scaling_params`, `parcel_scores`, and
+   `fiber_idx_v1_parcel` are keyed by `run_id`. Partition/cluster by `run_id`? Retention policy
+   for old runs (needed for the temporal validation axis)?
+5. **Ownership** — Which tables does the DE/platform team own and produce (FCC raw, location
+   stored-proc outputs, tract geometry) vs. which the modeling pipeline writes? Draws the
+   read/write boundary.
+6. **Location & rextag raw** — Confirm the in-house raw table/view names so the `sources`
+   registry can be completed (currently a tracked TODO).
