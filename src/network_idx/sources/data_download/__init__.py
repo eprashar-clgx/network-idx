@@ -1,0 +1,1 @@
+"""Development and backfill adapter that reads raw data from local file downloads. The Census Block Assignment Files and Address Count Listing are always sourced here. FCC and other families are downloaded here only for backfilling history, because their authoritative production source is the BigQuery production database."""

@@ -1,0 +1,1 @@
+"""Transformed features for the rextag family: source columns reshaped to their native grain by deterministic operations such as interpolation, pivoting, and grain cuts, with no analytical choices involved."""

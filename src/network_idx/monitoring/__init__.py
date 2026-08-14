@@ -1,0 +1,1 @@
+"""Runs cheap, automated health checks on every scoring run. It gates incoming data against an expected schema and quality thresholds, tracks null and fill rates, measures drift against the frozen baseline and training-versus-scoring parity, and produces business rollups of the delivered index."""

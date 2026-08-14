@@ -1,0 +1,1 @@
+"""Builds features for each source family. Every family is organised into two layers: a transform layer that deterministically reshapes source data to its native grain, and an engineered layer that computes features whose definitions were chosen during exploratory analysis."""

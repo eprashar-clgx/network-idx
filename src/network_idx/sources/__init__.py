@@ -1,0 +1,1 @@
+"""Ingests raw data for the pipeline behind a single interface, so that callers never depend on where the data physically comes from. The authoritative production source for the FCC, demographic, location, and rextag families is the BigQuery production database; the local file downloads are a development and backfill path only. The Census families are always downloaded."""

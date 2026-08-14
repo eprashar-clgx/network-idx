@@ -1,0 +1,1 @@
+"""Moves a feature from its native grain to another, either by aggregating upward from parcel to block to tract, or by broadcasting downward from tract to block to parcel. The promotion SQL is generated from a declarative per-family specification and executed through a pluggable backend."""
