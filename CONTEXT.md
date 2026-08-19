@@ -56,8 +56,9 @@ One of the five origins of features — **FCC**, **Census**, **Demographic** (in
 _Avoid_: dataset, feed, vendor.
 
 **Dasymetric interpolation**:
-Disaggregating FCC place/county coverage summaries down to blocks using location counts
-as the weight, then rolling blocks up to tracts.
+Disaggregating FCC place/county coverage summaries down to blocks using census
+housing-unit counts as the weight, then rolling blocks up to tracts weighted by each
+block's distributed FCC unit count.
 _Avoid_: areal interpolation, downscaling.
 
 ## Features
