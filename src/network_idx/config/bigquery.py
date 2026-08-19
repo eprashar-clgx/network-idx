@@ -69,11 +69,9 @@ BQ_PROD_VIEW_PROPERTY = "vw_property_v1"
 # location growth features (H3_FROMGEOGPOINT, H3_BOUNDARY).
 BQ_PROJECT_CARTO = os.getenv("BQ_PROJECT_CARTO", "carto-os")
 
-# Rextag (raw) — the fiber-optic cable geometry view. The fiber-optimize transform
-# reads this prod view directly. NOTE: the dataset is a best guess pending
-# confirmation with the data engineer; override with BQ_PROD_DATASET_REXTAG if it
-# differs.
-BQ_PROD_DATASET_REXTAG = os.getenv("BQ_PROD_DATASET_REXTAG", "edr_ent_common_reference_ext")
+# Rextag (raw) — the fiber-optic cable geometry view, in the property energy
+# infrastructure dataset. The fiber-optimize transform reads this prod view directly.
+BQ_PROD_DATASET_REXTAG = os.getenv("BQ_PROD_DATASET_REXTAG", "edr_ent_property_energy_infrastructure")
 BQ_PROD_VIEW_REXTAG_FIBER = "vw_rextag_telecommunications_fiber_optic_cables"
 
 # ── Demographics / population ─────────────────────────────────────────────────
