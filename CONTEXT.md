@@ -115,7 +115,27 @@ _Avoid_: model registry, artifact store.
 **Monitoring**:
 Cheap, automated, every-run health of the pipeline and its outputs — null/fill rates,
 drift vs the frozen baseline, train/scoring parity, score-band and business rollups.
+Splits into **feature monitoring** and **score monitoring**.
 _Avoid_: QA, observability, logging.
+
+**Feature monitoring**:
+Every-run health of the *input features themselves*, at their native grain — null/fill
+and inf rates, value distributions, quantile-band counts, and per-state rollups of each
+feature before it is scored. Distinct from the data contract check (which gates raw
+inputs) and from score monitoring (which watches the output index).
+_Avoid_: feature validation, feature QA, profiling.
+
+**Score monitoring**:
+Every-run health of the *output index* — score-band counts, index-quartile business
+rollups (per-state, scores>85), and drift of the delivered score vs the frozen baseline.
+_Avoid_: output validation, business QA.
+
+**Dasymetric conservation check**:
+A deterministic correctness assertion on the FCC block interpolation: re-aggregated block
+unit counts must reconstruct the FCC source total per county × technology × speed tier,
+within a rounding budget. A data-contract-style gate that halts on breach — it catches
+share/residual algebra bugs, not statistical drift.
+_Avoid_: interpolation test, mass-balance QA.
 
 **Validation**:
 The periodic construct-validity dossier for the composite indicator — sensitivity,
