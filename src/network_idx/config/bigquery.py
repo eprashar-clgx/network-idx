@@ -20,6 +20,7 @@ BQ_TABLE_FCC_SPEEDS_PROVIDERS_H3 = "fcc_fixed_speeds_providers_h3"
 
 # ── FCC coverage ──────────────────────────────────────────────────────────────
 BQ_DATASET_FCC_COVERAGE = os.getenv("BQ_DATASET_FCC_COVERAGE", "teu_telecom")
+BQ_TABLE_FCC_COVERAGE_SUMMARY = "fcc_coverage_summary"
 BQ_TABLE_FCC_COVERAGE_BLOCK = "fcc_coverage_block"
 BQ_TABLE_FCC_COVERAGE_COUNTY_RESIDUALS = "fcc_coverage_county_residuals"
 
