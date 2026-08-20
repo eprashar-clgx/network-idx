@@ -28,9 +28,9 @@ from network_idx.config import (
     BQ_TABLE_SCALING_PARAMS,
 )
 from network_idx.constants import SCORING_RUN_ID
+from network_idx.modeling.fit_rules import fit_scaling_params
 from network_idx.scoring.scaling import (
     build_stats_query,
-    compute_scaling_params_bq,
     write_scaling_params,
 )
 from network_idx.utils import check_and_authenticate
@@ -59,7 +59,7 @@ def run(run_id: str, dry_run: bool = False) -> None:
         return
 
     client = get_bq_client()
-    params = compute_scaling_params_bq(client, source_table, run_id)
+    params = fit_scaling_params(client, source_table, run_id)
     print(params.to_string(index=False))
     write_scaling_params(client, params, output_table, run_id)
 

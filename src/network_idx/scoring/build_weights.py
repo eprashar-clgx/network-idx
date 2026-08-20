@@ -36,10 +36,9 @@ from network_idx.config import (
     BQ_TABLE_FEATURE_WEIGHTS,
 )
 from network_idx.constants import SCORING_RUN_ID
-from network_idx.scoring.weights import (
-    compute_feature_weights,
-    write_feature_weights,
-)
+from network_idx.modeling.fit_rules import fit_feature_weights
+from network_idx.modeling.registry import build_run_record, write_run
+from network_idx.scoring.weights import write_feature_weights
 from network_idx.utils import check_and_authenticate
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -76,7 +75,7 @@ def run(
     shap_values = joblib.load(shap_values_path)
     x_shap = joblib.load(x_shap_path)
 
-    weights = compute_feature_weights(
+    weights = fit_feature_weights(
         shap_values, x_shap, run_id, bucket_tol=bucket_tol, strict=strict
     )
     print(weights.to_string(index=False))
@@ -87,6 +86,7 @@ def run(
 
     client = get_bq_client()
     write_feature_weights(client, weights, output_table, run_id)
+    write_run(client, build_run_record(run_id, feature_weights_table=output_table))
 
 
 if __name__ == "__main__":
