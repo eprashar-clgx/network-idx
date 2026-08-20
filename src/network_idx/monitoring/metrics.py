@@ -56,6 +56,11 @@ DISTRIBUTION_QUANTILES = [
 # Default thresholds for flagging a feature's distribution as suspect.
 DEFAULT_MAX_NULL_RATE = 0.05
 
+# The two derived telecom features whose band counts are tracked per run, and the default
+# band edges that split their [0, 1] range into five equal bands. Both are configurable.
+BAND_COUNT_FEATURES = ["fiber_opportunity_gap", "fiber_speed_top_tier"]
+DEFAULT_BAND_EDGES = [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
+
 
 def features_table_ref() -> str:
     """Return the fully qualified block telecom feature table this monitor reads."""
@@ -175,6 +180,125 @@ def run(client=None, features: list[str] | None = None) -> tuple[pd.DataFrame, D
         f"{'no flags' if report.passed else 'FLAGS: ' + str(report.flags)}."
     )
     return dist_df, report
+
+
+# ── Feature band counts and per-state rollups ─────────────────────────────────
+
+
+def band_labels(edges: list[float]) -> list[str]:
+    """
+    Return the ordered band labels for a set of edges, as half-open intervals.
+
+    Each label covers the interval from one edge up to the next and is written half-open
+    except for the final band, which is closed so the top edge itself lands in a band. The
+    labels are returned in ascending order so a caller can present or sort the counts
+    consistently.
+    """
+    labels = []
+    for i in range(len(edges) - 1):
+        closing = "]" if i == len(edges) - 2 else ")"
+        labels.append(f"[{edges[i]:.2f},{edges[i + 1]:.2f}{closing}")
+    return labels
+
+
+def _band_case(feature: str, edges: list[float]) -> str:
+    """
+    Render the CASE expression that maps a feature value to its band label.
+
+    Null values map to a 'null' band and values outside the edge range map to 'below_range'
+    or 'above_range', so no block is silently dropped; every other value falls in exactly one
+    half-open band, with the top edge included in the final band.
+    """
+    labels = band_labels(edges)
+    whens = [
+        f"WHEN {feature} IS NULL THEN 'null'",
+        f"WHEN {feature} < {edges[0]:.2f} THEN 'below_range'",
+    ]
+    for i, label in enumerate(labels):
+        if i == len(labels) - 1:
+            whens.append(f"WHEN {feature} <= {edges[i + 1]:.2f} THEN '{label}'")
+        else:
+            whens.append(f"WHEN {feature} < {edges[i + 1]:.2f} THEN '{label}'")
+    whens.append("ELSE 'above_range'")
+    indented = "\n      ".join(whens)
+    return f"CASE\n      {indented}\n    END"
+
+
+def _feature_band_select(feature: str, table: str, edges: list[float]) -> str:
+    """
+    Render the per-state band-count SELECT for a single feature.
+
+    Each row counts the blocks in one state whose feature value falls in one band, using the
+    block table's state FIPS (the first two digits of the block GEOID) as the state key.
+    """
+    return f"""SELECT
+    '{feature}' AS feature,
+    state_fips,
+    {_band_case(feature, edges)} AS band,
+    COUNT(*) AS n_blocks
+  FROM `{table}`
+  GROUP BY state_fips, band"""
+
+
+def render_band_counts_sql(
+    features_table: str,
+    features: list[str] | None = None,
+    edges: list[float] | None = None,
+) -> str:
+    """
+    Render the per-state band-count query as a union over the tracked features.
+
+    This is a pure function: it builds one per-state band-count SELECT per feature from the
+    feature list and band edges and unions them, performing no input or output so it can be
+    unit tested. The result is one row per feature, state, and band giving the block count.
+    """
+    if features is None:
+        features = BAND_COUNT_FEATURES
+    if edges is None:
+        edges = DEFAULT_BAND_EDGES
+    return "\nUNION ALL\n".join(
+        _feature_band_select(feature, features_table, edges) for feature in features
+    )
+
+
+def national_band_totals(band_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Roll the per-state band counts up to national totals per feature and band.
+
+    This is a pure function that sums the block counts across states, returning one row per
+    feature and band, so a caller can see the national shape without re-querying.
+    """
+    return (
+        band_df.groupby(["feature", "band"], as_index=False)["n_blocks"]
+        .sum()
+        .sort_values(["feature", "band"])
+        .reset_index(drop=True)
+    )
+
+
+def run_band_counts(
+    client=None,
+    features: list[str] | None = None,
+    edges: list[float] | None = None,
+) -> pd.DataFrame:
+    """
+    Compute the per-state band counts for the tracked telecom features.
+
+    The band-count query is rendered and read from BigQuery, and the per-state
+    one-row-per-band frame is logged and returned. A client is created if one is not
+    supplied; the national rollup is available from national_band_totals.
+    """
+    if client is None:
+        client = get_bq_client()
+
+    sql = render_band_counts_sql(features_table_ref(), features, edges)
+    band_df = client.query(sql).to_dataframe()
+
+    logger.info(
+        f"Telecom feature band counts: {len(band_df)} feature-state-band rows across "
+        f"{band_df['state_fips'].nunique() if len(band_df) else 0} states."
+    )
+    return band_df
 
 
 if __name__ == "__main__":
