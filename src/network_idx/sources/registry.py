@@ -106,6 +106,20 @@ RAW_SOURCES_BQ = {
         config.BQ_PROD_DATASET_REXTAG,
         config.BQ_PROD_VIEW_REXTAG_FIBER,
     ),
+    # Census block reference tables. Produced by the processing stage from Census
+    # downloads and landed in BigQuery by the one-time census-blocks uploader; they live
+    # in the active (dev) project for now and move to the production project once Data
+    # Engineering persists them there, at which point only the project/dataset changes.
+    "census_baf_block": BQSource(
+        config.GCS_PROJECT_ID,
+        config.BQ_DATASET_CENSUS,
+        config.BQ_TABLE_CENSUS_BAF_BLOCK,
+    ),
+    "census_acl_block": BQSource(
+        config.GCS_PROJECT_ID,
+        config.BQ_DATASET_CENSUS,
+        config.BQ_TABLE_CENSUS_ACL_BLOCK,
+    ),
 }
 
 # Download raw sources, keyed by their stable logical name.

@@ -91,6 +91,17 @@ BQ_TABLE_REXTAG_DISTANCE_CT = "rextag_distance_ct"
 BQ_DATASET_BOUNDARY = os.getenv("BQ_DATASET_BOUNDARY", "boundary")
 BQ_TABLE_CENSUS_TRACT_BOUNDARY = "census_tract_optimized"
 
+# ── Census block reference tables (BigQuery) ──────────────────────────────────
+# The block-assignment crosswalk (block → county/tract/place) and the address-count
+# housing units per block are produced by the processing stage from Census downloads.
+# The dasymetric FCC-coverage interpolation reads them from BigQuery, so they are landed
+# there by a one-time uploader until Data Engineering persists them in the production
+# project. The dataset defaults to the demographics dataset (Census-sourced reference
+# data), and is overridable per environment.
+BQ_DATASET_CENSUS = os.getenv("BQ_DATASET_CENSUS", "teu_demographics")
+BQ_TABLE_CENSUS_BAF_BLOCK = "census_baf_block"
+BQ_TABLE_CENSUS_ACL_BLOCK = "census_acl_block"
+
 # ── Rextag (fiber) intermediate tables ────────────────────────────────────────
 # The fiber-optimize transform writes the cleaned, subdivided fiber geometry here,
 # in the telecom intermediate dataset.
