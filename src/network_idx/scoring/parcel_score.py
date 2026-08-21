@@ -51,6 +51,7 @@ from network_idx.constants import (
 
 from network_idx.scoring.scaling import read_scaling_params
 from network_idx.scoring.weights import read_feature_weights
+from network_idx.modeling.registry import read_run, scoring_runs_table_ref
 from network_idx.utils import check_and_authenticate
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -294,10 +295,31 @@ LEFT JOIN `{scores_table}` ps ON ps.parcel_shape_id = pf.parcel_shape_id
 LEFT JOIN `{growth_table}` g  ON g.parcel_shape_id  = pf.parcel_shape_id
 """
 
+def resolve_artifact_tables(client: bigquery.Client, run_id: str) -> tuple:
+    """Look the run up in the run registry and return its (scaling_params_table,
+    feature_weights_table). The registry is the source of truth for where a run's
+    rules live, so scoring reads it instead of assuming the configured defaults. If the
+    run has no registry row yet (older runs written before the registry existed), fall
+    back to the configured analytics tables and warn, so scoring stays runnable."""
+    default_scaling = f"{GCS_PROJECT_ID}.{BQ_DATASET_ANALYTICS}.{BQ_TABLE_SCALING_PARAMS}"
+    default_weights = f"{GCS_PROJECT_ID}.{BQ_DATASET_ANALYTICS}.{BQ_TABLE_FEATURE_WEIGHTS}"
+    try:
+        reg = read_run(client, run_id, scoring_runs_table_ref())
+    except Exception as e:  # registry table may not exist yet
+        logger.warning(f"Run registry unreadable ({e}); using configured artifact tables.")
+        return default_scaling, default_weights
+    if reg.empty:
+        logger.warning(
+            f"run_id={run_id} not found in run registry; using configured artifact "
+            f"tables. Register the run via build_weights to make scoring self-describing."
+        )
+        return default_scaling, default_weights
+    row = reg.iloc[0]
+    return str(row["scaling_params_table"]), str(row["feature_weights_table"])
+
+
 def run(run_id: str, dry_run: bool = False) -> None:
     features_table = f"{GCS_PROJECT_ID}.{BQ_DATASET_FEATURES}.{BQ_TABLE_PARCEL_FEATURES}"
-    scaling_table = f"{GCS_PROJECT_ID}.{BQ_DATASET_ANALYTICS}.{BQ_TABLE_SCALING_PARAMS}"
-    weights_table = f"{GCS_PROJECT_ID}.{BQ_DATASET_ANALYTICS}.{BQ_TABLE_FEATURE_WEIGHTS}"
     output_table = f"{GCS_PROJECT_ID}.{BQ_DATASET_OUTPUTS}.{BQ_TABLE_PARCEL_SCORES}"
 
     logger.info(f"Features: {features_table}")
@@ -305,6 +327,7 @@ def run(run_id: str, dry_run: bool = False) -> None:
     logger.info(f"run_id:   {run_id}")
 
     client = get_bq_client()
+    scaling_table, weights_table = resolve_artifact_tables(client, run_id)
     params = read_scaling_params(client, scaling_table, run_id)
     weights = read_feature_weights(client, weights_table, run_id)
     if params.empty:
@@ -325,8 +348,6 @@ def run(run_id: str, dry_run: bool = False) -> None:
 def run_delivery(run_id: str, dry_run: bool = False) -> None:
     features_table = f"{GCS_PROJECT_ID}.{BQ_DATASET_FEATURES}.{BQ_TABLE_PARCEL_FEATURES}"
     growth_table = f"{GCS_PROJECT_ID}.{BQ_DATASET_FEATURES}.{BQ_TABLE_PARCEL_GROWTH}"
-    scaling_table = f"{GCS_PROJECT_ID}.{BQ_DATASET_ANALYTICS}.{BQ_TABLE_SCALING_PARAMS}"
-    weights_table = f"{GCS_PROJECT_ID}.{BQ_DATASET_ANALYTICS}.{BQ_TABLE_FEATURE_WEIGHTS}"
     scores_table = f"{GCS_PROJECT_ID}.{BQ_DATASET_OUTPUTS}.{BQ_TABLE_PARCEL_SCORES}"
     output_table = f"{GCS_PROJECT_ID}.{BQ_DATASET_OUTPUTS}.{BQ_TABLE_FIBER_IDX_PARCEL}"
 
@@ -334,6 +355,7 @@ def run_delivery(run_id: str, dry_run: bool = False) -> None:
     logger.info(f"run_id:          {run_id}")
 
     client = get_bq_client()
+    scaling_table, weights_table = resolve_artifact_tables(client, run_id)
     params = read_scaling_params(client, scaling_table, run_id)
     weights = read_feature_weights(client, weights_table, run_id)
     if params.empty or weights.empty:
