@@ -140,6 +140,7 @@ BQ_TABLE_PARCEL_FEATURES = "parcel_features"               # final joined featur
 BQ_TABLE_FEATURE_WEIGHTS = "feature_weights"   # slim: 1 row per feature per run
 BQ_TABLE_SCALING_PARAMS = "scaling_params"     # frozen country-wide scaling stats per run
 BQ_TABLE_SCORING_RUNS = "scoring_runs"         # run registry: 1 row per run_id (model metadata + artifact refs)
+BQ_TABLE_MONITORING_BASELINE = "monitoring_baseline"  # frozen distribution snapshots per run_id + kind (drift reference)
 
 # teu_outputs — final scores
 BQ_TABLE_PARCEL_SCORES = "parcel_scores"       # scaled features + parcel index (run_id)
