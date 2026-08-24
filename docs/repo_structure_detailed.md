@@ -29,7 +29,7 @@ flowchart LR
   SRC["<b>sources</b><br/>——<br/>read-only<br/>(no persisted<br/>outputs)"]
   PROC["<b>processing</b><br/>——<br/>census_baf_block<br/>census_acl_block"]
   FEAT["<b>features</b><br/>——<br/>fcc_coverage_block<br/>fcc_fixed_speeds_block<br/>telecom_features_block<br/>demo_pop_ct<br/>loc_growth_cnts_parcel<br/>loc_growth_distance_parcel<br/>rextag_distance_parcel<br/>parcel_features*"]
-  GT["<b>grain_transfer</b> ⚠️<br/>not built in src<br/>——<br/>fcc_fixed_speeds_ct<br/>fcc_fixed_coverage_ct<br/>(_bucketed_speeds)<br/>loc_parcels_growth_ct ⚠️<br/>rextag_distance_ct ⚠️<br/>all_features_tract"]
+  GT["<b>grain_transfer</b><br/>——<br/>fcc_fixed_speeds_ct<br/>fcc_fixed_coverage_ct<br/>(_bucketed_speeds)<br/>loc_parcels_growth_ct<br/>rextag_distance_ct<br/>all_features_tract"]
   MODEL["<b>modeling</b><br/>——<br/>feature_weights<br/>scaling_params<br/>scoring_runs"]
   SCORE["<b>scoring</b><br/>——<br/>parcel_scores<br/>fiber_idx_v1_parcel<br/>+ 3 QA tables"]
   MON["<b>monitoring</b><br/>——<br/>read-only<br/>(no tables)"]
@@ -51,7 +51,7 @@ flowchart LR
 | `sources` | ✅ | Census download + BQ-prod adapter |
 | `processing` | ✅ | Census → block |
 | `features` (telecom/location/rextag/demographic + parcel assembly) | ✅ | all five families migrated |
-| `grain_transfer` | ❌ **gap** | still the legacy `feature_engg/` + `transfer/` scripts; 2 CT tables have no producer at all |
+| `grain_transfer` | 🟡 partial | spec-driven `promote` + BQ/DuckDB adapters built; 2 parcel→tract CT runners ported; FCC `*_ct` still on legacy bridge |
 | `modeling` | ✅ | `train` + `fit_rules` + `registry` (run registry `scoring_runs` is new) |
 | `scoring` | ✅ | rewired to resolve artifacts from the run registry |
 | `monitoring` | 🟡 partial | conservation gate + feature distributions/bands done; input gate, score-side metrics, business rollups pending |
@@ -142,27 +142,36 @@ Reads: `loc_growth_cnts_parcel` (parcel) · `telecom_features_block` (block↓) 
 
 ---
 
-## 4. `grain_transfer` — ⚠️ NOT BUILT (target: `promote` + `specs` + adapters)
+## 4. `grain_transfer` — 🟡 PARTLY BUILT (spec-driven `promote` + bespoke CT runners)
 
-Currently produced by the **legacy `feature_engg/` + `transfer/`** scripts. This is the
-principal remaining structural gap: it feeds the **tract training frame** only.
+The module now exists: a spec-driven `promote()` with BigQuery + DuckDB adapters covers
+the regular block→tract promotion, and the two bespoke parcel→tract spatial aggregations
+are ported as SQL runners. The FCC `*_ct` tables are still produced by the **legacy
+`feature_engg/` + `transfer/`** scripts pending migration onto `promote`. It feeds the
+**tract training frame** only.
 
 | Produces | Grain | Producer today | Tier | Status |
 | --- | --- | --- | --- | --- |
 | `PROJECT.teu_features.fcc_fixed_coverage_ct` | tract | `transfer/fcc_fixed_coverage_features_bq.py` | 🟢 Persist | legacy bridge |
 | `PROJECT.teu_features.fcc_fixed_coverage_ct_bucketed_speeds` | tract | `feature_engg/fcc_fixed_summary_ct_bucketing_bq.py` | 🟢 Persist | legacy bridge |
-| `PROJECT.teu_features.fcc_fixed_speeds_ct` | tract | `feature_engg/fcc_fixed_speeds_tract.py` + `transfer/…speeds_features_ct_bq.py` | 🟢 Persist | legacy bridge |
-| `PROJECT.teu_features.loc_parcels_growth_ct` | tract | **❌ no `src` producer** (notebook/manual) | 🟢 Persist | **missing** |
-| `PROJECT.teu_features.rextag_distance_ct` | tract | **❌ no `src` producer** | 🟢 Persist | **missing** |
+| `PROJECT.teu_features.fcc_fixed_speeds_ct` | tract | `feature_engg/fcc_fixed_speeds_tract.py` (spec `FCC_SPEEDS_CT_SPEC` ready in `promote`) | 🟢 Persist | migrating |
+| `PROJECT.teu_features.loc_parcels_growth_ct` | tract | **`grain_transfer/location_growth_ct.py`** (port of `create_parcel_growth_agg_ct`) | 🟢 Persist | ✅ built |
+| `PROJECT.teu_features.rextag_distance_ct` | tract | **`grain_transfer/rextag_distance_ct.py`** (port of `create_fiber_agg_ct`) | 🟢 Persist | ✅ built |
 | `PROJECT.teu_features.all_features_tract` | tract | `feature_engg/all_features_tract_bq.py` | 🟢 Persist (modeling input) | legacy bridge |
 
-Also depends on `PROJECT.boundary.ct_tract_crosswalk_2020` (CT 2020→current GEOID remap)
-and `PROJECT.boundary.census_tract_optimized` (tract boundary) — to be registered as
-grain_transfer inputs (`grain-transfer-crosswalk`).
+The two parcel→tract aggregations reach tract by a **spatial join** of the parcel centroid
+against `tract_geometry` (prod view), not a block-id crosswalk. `all_features_tract` also
+depends on `PROJECT.boundary.ct_tract_crosswalk_2020` (CT 2020→current GEOID remap) and
+`PROJECT.boundary.census_tract_optimized` (tract boundary).
 
 > Reconciliation: `repo_structure.md` §8 lists all six as "Persist" (target). No tier
-> change here — the addition is **build status**: two have no producer anywhere in the
-> repo, which is the concrete case for building `grain_transfer`.
+> change here. Build status updated: the two previously-missing CT tables now have `src`
+> producers (ported from the authoritative stored procedures); the FCC `*_ct` tables
+> remain on the legacy bridge until migrated onto `promote`.
+>
+> ⚠️ Drift to reconcile: `rextag_distance_ct` reads `dist_to_nearest_fiber_m` (metres)
+> per the original proc, but the rearchitected rextag feature emits
+> `dist_to_nearest_fiber_miles`.
 
 ---
 
