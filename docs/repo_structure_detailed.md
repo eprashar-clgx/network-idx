@@ -33,7 +33,7 @@ flowchart LR
   MODEL["<b>modeling</b><br/>——<br/>feature_weights<br/>scaling_params<br/>scoring_runs"]
   SCORE["<b>scoring</b><br/>——<br/>parcel_scores<br/>fiber_idx_v1_parcel<br/>+ 3 QA tables"]
   MON["<b>monitoring</b><br/>——<br/>read-only<br/>(no tables)"]
-  VAL["<b>validation</b> ⚠️<br/>not built<br/>——<br/>dossier<br/>(no tables)"]
+  VAL["<b>validation</b> 🟡<br/>built<br/>——<br/>dossier<br/>(no tables)"]
 
   SRC --> PROC --> FEAT --> GT --> MODEL --> SCORE --> MON
   FEAT --> SCORE
@@ -54,8 +54,8 @@ flowchart LR
 | `grain_transfer` | 🟡 partial | spec-driven `promote` + BQ/DuckDB adapters built; 2 parcel→tract CT runners ported; FCC `*_ct` still on legacy bridge |
 | `modeling` | ✅ | `train` + `fit_rules` + `registry` (run registry `scoring_runs` is new) |
 | `scoring` | ✅ | rewired to resolve artifacts from the run registry |
-| `monitoring` | 🟡 partial | conservation gate + feature distributions/bands done; input gate, score-side metrics, business rollups pending |
-| `validation` | ❌ | not built |
+| `monitoring` | 🟢 | conservation gate + feature distributions/bands + business rollups + drift (vs `monitoring_baseline`) + train/scoring parity all built |
+| `validation` | 🟡 | four-axis construct-validity kernels built + tested (internal/external/temporal/expert + dossier); external-data loaders and archived-snapshot wiring deferred |
 
 ---
 
