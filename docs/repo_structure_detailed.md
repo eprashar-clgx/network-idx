@@ -61,6 +61,8 @@ flowchart LR
 
 ## 1. `sources` — ingest raw behind adapters (read-only)
 
+![Fiber Index Sources and Features Summary](images/fiber_idx_sources_features.png)
+
 No persisted outputs. Reads external production tables (owned by data engineering) and
 downloads Census BAF/ACL to files. Tier **Raw**.
 
