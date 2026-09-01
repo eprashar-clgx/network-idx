@@ -72,8 +72,8 @@ parcel_to_ct_agg AS (
 ct_dist_stats AS (
     SELECT
         p.tract_id,
-        AVG(pd.dist_to_nearest_hotspot_m) AS mean_dist_nearest_hotspot_m,
-        APPROX_QUANTILES(pd.dist_to_nearest_hotspot_m, 2)[OFFSET(1)] AS median_dist_nearest_hotspot
+        AVG(pd.dist_to_nearest_hotspot_miles) AS mean_dist_nearest_hotspot_miles,
+        APPROX_QUANTILES(pd.dist_to_nearest_hotspot_miles, 2)[OFFSET(1)] AS median_dist_nearest_hotspot
     FROM parcel_to_ct p
     LEFT JOIN `clgx-gis-app-dev-06e3.teu_features.loc_growth_distance_parcel` pd
         ON p.parcel_shape_id = pd.parcel_shape_id
@@ -89,7 +89,8 @@ SELECT
         GREATEST(pca.landuse_change_count, pca.builder_developer_count,
                  pca.building_permit_count, pca.new_clip_count, pca.parcel_split_count)
         AS flags_minus_greatest,
-    cds.mean_dist_nearest_hotspot_m,
+    cds.mean_dist_nearest_hotspot_miles,
     cds.median_dist_nearest_hotspot
 FROM parcel_to_ct_agg pca
 LEFT JOIN ct_dist_stats cds ON pca.tract_id = cds.tract_id;
+

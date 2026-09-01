@@ -53,11 +53,15 @@ read access) or only `DEV_PROJECT` tables produced by earlier steps.
 09 fiber_optimize ──> 10 fiber_distance ────────────────────────────────────────────┤
 11 population_change ─────────────────────────────────────────────────────────────────┤
 07,08 ──> 12 location_growth_ct                                                      │
-10 ─────> 13 rextag_distance_ct ─────────────────────────────────────────────────────┤
-                       └──> 14 parcel_features ──> 15 scaling_params
-                                              └──> 16 parcel_score
+10 ─────> 13 rextag_distance_ct                                                      │
+04 ─────> 14 fcc_features_ct  (PROD+DEV)                                             │
+11,12,13,14 ──> 15 features_ct  (tract training frame)                               │
+                       └──> 16 parcel_features ──> 17 scaling_params
+                                              └──> 18 parcel_score
 ```
-(05 also needs 01; 04 also needs 02 + census blocks.)
+(05 also needs 01; 04 also needs 02 + census blocks. Steps 14→15 are the tract
+training-frame path the model is fit on; 16→18 are the parcel scoring path. Both
+carry the same thirteen model features — train/score parity.)
 
 | Seq | File | Reads | Depends on | Produces (dataset.table) |
 |-----|------|-------|-----------|--------------------------|
@@ -74,9 +78,11 @@ read access) or only `DEV_PROJECT` tables produced by earlier steps.
 | 11 | `features/demographic/01_population_change.sql` | PROD | — | `teu_features.demo_pop_ct` |
 | 12 | `grain_transfer/01_location_growth_ct.sql` | PROD + DEV | 7, 8 | `teu_features.loc_parcels_growth_ct` |
 | 13 | `grain_transfer/02_rextag_distance_ct.sql` | PROD + DEV | 10 | `teu_features.rextag_distance_ct` |
-| 14 | `features/parcel_features.sql` | DEV | 5, 7, 8, 10, 11, 12, 13 | `teu_features.parcel_features` |
-| 15 | `scoring/01_scaling_params_scan.sql` | DEV | 14 | `teu_analytics.scaling_params` |
-| 16 | `scoring/02_parcel_score.sql` | DEV | 14 + fitted weights/scaling | `teu_outputs.parcel_scores` |
+| 14 | `grain_transfer/03_fcc_features_ct.sql` | PROD + DEV | 4 | `teu_features.telecom_features_ct` |
+| 15 | `grain_transfer/04_features_ct.sql` | DEV | 11, 12, 13, 14 | `teu_features.features_ct` |
+| 16 | `features/parcel_features.sql` | DEV | 5, 7, 8, 10, 11, 12, 13 | `teu_features.parcel_features` |
+| 17 | `scoring/01_scaling_params_scan.sql` | DEV | 16 | `teu_analytics.scaling_params` |
+| 18 | `scoring/02_parcel_score.sql` | DEV | 16 + fitted weights/scaling | `teu_outputs.parcel_scores` |
 
 Steps 3 & 4 read the Census block tables from Stage-0 in addition to step 2's
 `fcc_coverage_summary`.

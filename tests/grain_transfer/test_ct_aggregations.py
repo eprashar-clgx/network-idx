@@ -62,7 +62,7 @@ def test_location_render_emits_expected_aggregates():
         "median_bldr_dev_qtr_mi_cnt",
         "total_flags",
         "flags_minus_greatest",
-        "mean_dist_nearest_hotspot_m",
+        "mean_dist_nearest_hotspot_miles",
         "median_dist_nearest_hotspot",
     ):
         assert col in sql
@@ -106,8 +106,8 @@ def test_rextag_render_emits_expected_aggregates():
     sql = _render_rextag()
     for col in (
         "total_growth_parcels",
-        "mean_dist_nearest_fiber_m",
-        "median_dist_nearest_fiber_m",
+        "mean_dist_nearest_fiber_miles",
+        "median_dist_nearest_fiber_miles",
         "mean_radius_fiber_count",
         "median_radius_fiber_count",
     ):

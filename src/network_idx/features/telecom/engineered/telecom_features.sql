@@ -1,15 +1,3 @@
--- =============================================================================
--- Engineered block telecom feature family.
--- Module        : network_idx.features.telecom.engineered.telecom_features_block
--- Generated from : src/network_idx/features/telecom/engineered/telecom_features_block.py  (python -m network_idx.features.telecom.engineered.telecom_features_block --dry-run)
--- Run in         : VM (dev-only, BQ-validated)
---
--- PROJECT SUBSTITUTION (only these two identifiers change per environment):
---   PROD_PROJECT = clgx-idap-bigquery-prd-a990   (raw source reads)
---   DEV_PROJECT  = clgx-gis-app-dev-06e3         (feature/output writes)
--- All dataset and table names are concrete. See sql/README.md for run order.
--- =============================================================================
-
 -- Telecom engineered features: the four telecom model features (grain-agnostic).
 --
 -- This is the single, grain-agnostic definition of the four engineered telecom features.
@@ -27,39 +15,8 @@
 -- fiber, and the provider competitive landscape as both a text label and its ordinal
 -- rank. The label-to-ordinal ladder is generated from the scoring contract so it cannot
 -- drift from the mapping the scorer relies on.
-CREATE OR REPLACE TABLE `clgx-gis-app-dev-06e3.teu_features.telecom_features_block` AS
-WITH -- Telecom engineered features (block grain): the `joined` input prelude.
---
--- This is the block-grain input CTE for the shared engineered-telecom-feature definition
--- (telecom_features.sql, rendered via _engineered_sql). The coverage block table is the
--- spine — it carries every block, its Census housing units, the estimated FCC units, and
--- the interpolated top-tier fiber coverage percentage — and is left-joined to the FCC
--- speeds block table for per-technology serviceable location and provider counts. Blocks
--- with no speeds row have no serviceable locations or providers, so those counts default
--- to zero. The shared definition then derives the four features from these columns; the
--- tables are rendered from configuration.
-joined AS (
-    SELECT
-        c.block_geoid,
-        c.state_fips,
-        c.state_usps,
-        c.county_geoid,
-        c.tract_geoid,
-        c.place_geoid,
-        c.census_housing_units,
-        c.estimated_fcc_units,
-        c.fiber_speed_1000_100_only,
-        COALESCE(s.cable_location_count, 0)  AS cable_location_count,
-        COALESCE(s.fiber_location_count, 0)  AS fiber_location_count,
-        COALESCE(s.copper_location_count, 0) AS copper_location_count,
-        COALESCE(s.cable_provider_count, 0)  AS cable_provider_count,
-        COALESCE(s.fiber_provider_count, 0)  AS fiber_provider_count,
-        COALESCE(s.copper_provider_count, 0) AS copper_provider_count
-    FROM `clgx-gis-app-dev-06e3.teu_telecom.fcc_coverage_block` AS c
-    LEFT JOIN `clgx-gis-app-dev-06e3.teu_telecom.fcc_fixed_speeds_block` AS s
-        ON c.block_geoid = s.block_geoid
-)
-,
+CREATE OR REPLACE TABLE `{output_table}`{cluster_clause} AS
+WITH {joined_prelude},
 features AS (
     SELECT
         * EXCEPT(fiber_speed_1000_100_only),
@@ -87,7 +44,7 @@ features AS (
     FROM joined
 )
 SELECT
-    block_geoid, state_fips, state_usps, county_geoid, tract_geoid, place_geoid,
+    {key_columns},
     census_housing_units,
     estimated_fcc_units,
     -- Raw provider counts retained for quality checks on the ordinal.
@@ -100,14 +57,7 @@ SELECT
     fiber_speed_1000_100_only * has_fiber AS fiber_speed_top_tier,
     provider_competitive_landscape,
     CASE provider_competitive_landscape
-        WHEN 'no_providers' THEN 0
-        WHEN 'greenfield' THEN 1
-        WHEN 'cable_but_no_fiber' THEN 2
-        WHEN 'fiber_entry' THEN 3
-        WHEN 'fiber_duopoly' THEN 4
-        WHEN 'fiber_competitive' THEN 5
-        WHEN 'fiber_saturated' THEN 6
+        {landscape_ord_cases}
         ELSE NULL
     END AS provider_competitive_landscape_ord
 FROM features
-

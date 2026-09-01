@@ -1,8 +1,8 @@
 -- =============================================================================
--- Engineered block telecom feature family.
--- Module        : network_idx.features.telecom.engineered.telecom_features_block
--- Generated from : src/network_idx/features/telecom/engineered/telecom_features_block.py  (python -m network_idx.features.telecom.engineered.telecom_features_block --dry-run)
--- Run in         : VM (dev-only, BQ-validated)
+-- Engineered telecom (FCC) features at census-tract grain.
+-- Module        : network_idx.grain_transfer.fcc_features_ct
+-- Generated from : src/network_idx/grain_transfer/fcc_features_ct.py  (python -m network_idx.grain_transfer.fcc_features_ct --dry-run)
+-- Run in         : CONSOLE (reads PROD)
 --
 -- PROJECT SUBSTITUTION (only these two identifiers change per environment):
 --   PROD_PROJECT = clgx-idap-bigquery-prd-a990   (raw source reads)
@@ -27,37 +27,80 @@
 -- fiber, and the provider competitive landscape as both a text label and its ordinal
 -- rank. The label-to-ordinal ladder is generated from the scoring contract so it cannot
 -- drift from the mapping the scorer relies on.
-CREATE OR REPLACE TABLE `clgx-gis-app-dev-06e3.teu_features.telecom_features_block` AS
-WITH -- Telecom engineered features (block grain): the `joined` input prelude.
+CREATE OR REPLACE TABLE `clgx-gis-app-dev-06e3.teu_features.telecom_features_ct`
+CLUSTER BY state_fips AS
+WITH -- FCC engineered telecom features (tract grain): the `joined` input prelude.
 --
--- This is the block-grain input CTE for the shared engineered-telecom-feature definition
--- (telecom_features.sql, rendered via _engineered_sql). The coverage block table is the
--- spine — it carries every block, its Census housing units, the estimated FCC units, and
--- the interpolated top-tier fiber coverage percentage — and is left-joined to the FCC
--- speeds block table for per-technology serviceable location and provider counts. Blocks
--- with no speeds row have no serviceable locations or providers, so those counts default
--- to zero. The shared definition then derives the four features from these columns; the
--- tables are rendered from configuration.
+-- This is the tract-grain input CTE for the shared engineered-telecom-feature definition
+-- (telecom_features.sql, rendered via _engineered_sql). Unlike the block prelude, the four
+-- engineered features are non-linear and cannot be rolled up from telecom_features_block,
+-- so this re-derives them from the transform-layer inputs aggregated to tract (ADR-0007):
+--
+--   * location counts and the housing-unit-weighted top-tier fiber speed come from the
+--     dasymetric FCC coverage block table, summed / weighted up to tract;
+--   * provider counts are COUNT(DISTINCT provider_id) read straight from the raw
+--     per-technology FCC provider tables and grouped to tract — a block provider count
+--     cannot be re-aggregated to a distinct tract count without double counting providers
+--     that span blocks;
+--   * housing units and estimated FCC units are simple sums of the block values.
+--
+-- The shared definition then derives the four features from these columns. Every source
+-- table is rendered from configuration.
+copper_prov AS (
+    SELECT
+        SUBSTR(block_geoid, 1, 11) AS tract_geoid,
+        COUNT(DISTINCT location_id) AS copper_location_count,
+        COUNT(DISTINCT provider_id) AS copper_provider_count
+    FROM `clgx-idap-bigquery-prd-a990.edr_ent_common_reference_ext.fcc_copper_fixed_broadband`
+    GROUP BY tract_geoid
+),
+cable_prov AS (
+    SELECT
+        SUBSTR(block_geoid, 1, 11) AS tract_geoid,
+        COUNT(DISTINCT location_id) AS cable_location_count,
+        COUNT(DISTINCT provider_id) AS cable_provider_count
+    FROM `clgx-idap-bigquery-prd-a990.edr_ent_common_reference_ext.fcc_cable_fixed_broadband`
+    GROUP BY tract_geoid
+),
+fiber_prov AS (
+    SELECT
+        SUBSTR(block_geoid, 1, 11) AS tract_geoid,
+        COUNT(DISTINCT location_id) AS fiber_location_count,
+        COUNT(DISTINCT provider_id) AS fiber_provider_count
+    FROM `clgx-idap-bigquery-prd-a990.edr_ent_common_reference_ext.fcc_fiber_fixed_broadband`
+    GROUP BY tract_geoid
+),
+coverage_ct AS (
+    SELECT
+        tract_geoid,
+        SUM(census_housing_units) AS census_housing_units,
+        SUM(estimated_fcc_units) AS estimated_fcc_units,
+        -- housing-unit(estimated_fcc_units)-weighted mean of the block top-tier coverage %
+        SAFE_DIVIDE(
+            SUM(estimated_fcc_units * fiber_speed_1000_100_only),
+            NULLIF(SUM(estimated_fcc_units), 0)
+        ) AS fiber_speed_1000_100_only
+    FROM `clgx-gis-app-dev-06e3.teu_telecom.fcc_coverage_block`
+    GROUP BY tract_geoid
+),
 joined AS (
     SELECT
-        c.block_geoid,
-        c.state_fips,
-        c.state_usps,
-        c.county_geoid,
-        c.tract_geoid,
-        c.place_geoid,
-        c.census_housing_units,
-        c.estimated_fcc_units,
-        c.fiber_speed_1000_100_only,
-        COALESCE(s.cable_location_count, 0)  AS cable_location_count,
-        COALESCE(s.fiber_location_count, 0)  AS fiber_location_count,
-        COALESCE(s.copper_location_count, 0) AS copper_location_count,
-        COALESCE(s.cable_provider_count, 0)  AS cable_provider_count,
-        COALESCE(s.fiber_provider_count, 0)  AS fiber_provider_count,
-        COALESCE(s.copper_provider_count, 0) AS copper_provider_count
-    FROM `clgx-gis-app-dev-06e3.teu_telecom.fcc_coverage_block` AS c
-    LEFT JOIN `clgx-gis-app-dev-06e3.teu_telecom.fcc_fixed_speeds_block` AS s
-        ON c.block_geoid = s.block_geoid
+        cov.tract_geoid,
+        -- the first two digits of the 11-digit tract GEOID are the state FIPS
+        SUBSTR(cov.tract_geoid, 1, 2) AS state_fips,
+        cov.census_housing_units,
+        cov.estimated_fcc_units,
+        cov.fiber_speed_1000_100_only,
+        COALESCE(cab.cable_location_count, 0)  AS cable_location_count,
+        COALESCE(fib.fiber_location_count, 0)  AS fiber_location_count,
+        COALESCE(cop.copper_location_count, 0) AS copper_location_count,
+        COALESCE(cab.cable_provider_count, 0)  AS cable_provider_count,
+        COALESCE(fib.fiber_provider_count, 0)  AS fiber_provider_count,
+        COALESCE(cop.copper_provider_count, 0) AS copper_provider_count
+    FROM coverage_ct cov
+    LEFT JOIN cable_prov  cab ON cov.tract_geoid = cab.tract_geoid
+    LEFT JOIN fiber_prov  fib ON cov.tract_geoid = fib.tract_geoid
+    LEFT JOIN copper_prov cop ON cov.tract_geoid = cop.tract_geoid
 )
 ,
 features AS (
@@ -87,7 +130,7 @@ features AS (
     FROM joined
 )
 SELECT
-    block_geoid, state_fips, state_usps, county_geoid, tract_geoid, place_geoid,
+    tract_geoid, state_fips,
     census_housing_units,
     estimated_fcc_units,
     -- Raw provider counts retained for quality checks on the ordinal.

@@ -24,9 +24,9 @@
 --
 -- Null fills are deliberately NOT applied here — the scaling step fills and winsorises each
 -- feature according to the scoring contract, so this table preserves genuine missingness. The
--- distance columns already hold miles (converted upstream), so they are only renamed, never
--- divided. Housing units are taken at block grain while population change stays at tract
--- grain, a documented grain divergence that is acceptable for the model.
+-- distance columns already hold miles (converted upstream), so they are carried through
+-- unchanged, never divided. Housing units are taken at block grain while population change
+-- stays at tract grain, a documented grain divergence that is acceptable for the model.
 CREATE OR REPLACE TABLE `clgx-gis-app-dev-06e3.teu_features.parcel_features` AS
 SELECT
     p.parcel_shape_id,
@@ -38,14 +38,14 @@ SELECT
     p.pre_early_dev_qtr_mi_cnt,
     p.bldr_dev_qtr_mi_cnt,
     p.new_permit_qtr_mi_cnt,
-    hs.dist_to_nearest_hotspot_m AS dist_to_nearest_hotspot_miles,
+    hs.dist_to_nearest_hotspot_miles,
 
     -- ── Telecom features (block grain) ──
     t.cable_penetration,
     t.fiber_opportunity_gap,
     t.fiber_speed_top_tier,
     t.provider_competitive_landscape_ord,
-    rf.dist_to_nearest_fiber_m AS dist_to_nearest_fiber_miles,
+    rf.dist_to_nearest_fiber_miles,
     rf.nearest_fiber_id,
 
     -- ── Demographic features: population change (tract) + housing units (block) ──
@@ -57,3 +57,4 @@ LEFT JOIN `clgx-gis-app-dev-06e3.teu_features.rextag_distance_parcel`  AS rf ON 
 LEFT JOIN `clgx-gis-app-dev-06e3.teu_features.loc_growth_distance_parcel` AS hs ON p.parcel_shape_id = hs.parcel_shape_id
 LEFT JOIN `clgx-gis-app-dev-06e3.teu_features.telecom_features_block`    AS t  ON p.block_id = t.block_geoid
 LEFT JOIN `clgx-gis-app-dev-06e3.teu_features.demo_pop_ct`       AS d  ON SUBSTR(p.block_id, 1, 11) = d.tract_geoid
+

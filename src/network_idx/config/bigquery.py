@@ -86,6 +86,12 @@ BQ_SOURCE_NEIGHBORHOOD_SCOUT_CT = os.getenv(
 # ── Other source tables ───────────────────────────────────────────────────────
 BQ_TABLE_LOC_PARCELS_GROWTH_CT = "loc_parcels_growth_ct"
 BQ_TABLE_REXTAG_DISTANCE_CT = "rextag_distance_ct"
+# Engineered telecom (FCC) features rolled up to census tract, and the assembled
+# tract-grain training frame (the CT analogue of parcel_features). The FCC-CT features
+# are re-derived at tract from the transform-layer inputs via the shared engineered
+# definition (see ADR-0007); the CT frame joins all four families on tract_geoid.
+BQ_TABLE_TELECOM_FEATURES_CT = "telecom_features_ct"
+BQ_TABLE_FEATURES_CT = "features_ct"
 # The boundary dataset holds optimised boundary tables and the spatial helper UDFs
 # (for example st_subdivide16 used by the fiber-optimize transform). It lives in the
 # active project, so only the dataset name is configured.

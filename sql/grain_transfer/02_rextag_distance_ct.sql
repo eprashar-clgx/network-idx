@@ -21,10 +21,9 @@
 -- count. Every source table, the tract boundary, and the output table are rendered from
 -- configuration.
 --
--- NOTE: the source procedure reads `dist_to_nearest_fiber_m` and `radius_fiber_count`
--- from the rextag distance parcel table. The rearchitected rextag feature currently emits
--- the distance as `dist_to_nearest_fiber_miles`; that column name (and its unit) must be
--- reconciled with this promotion before the pipeline runs end to end.
+-- The distance is read in miles (`dist_to_nearest_fiber_miles`) to match the scoring
+-- contract and the parcel-grain feature; the aggregated columns carry the `_miles` suffix
+-- so the unit is unambiguous end to end.
 
 CREATE OR REPLACE TABLE `clgx-gis-app-dev-06e3.teu_features.rextag_distance_ct`
 CLUSTER BY tract_id AS
@@ -41,11 +40,12 @@ WITH parcel_to_ct AS (
 SELECT
     p.tract_id,
     COUNT(p.parcel_shape_id) AS total_growth_parcels,
-    AVG(rd.dist_to_nearest_fiber_m) AS mean_dist_nearest_fiber_m,
-    APPROX_QUANTILES(rd.dist_to_nearest_fiber_m, 2)[OFFSET(1)] AS median_dist_nearest_fiber_m,
+    AVG(rd.dist_to_nearest_fiber_miles) AS mean_dist_nearest_fiber_miles,
+    APPROX_QUANTILES(rd.dist_to_nearest_fiber_miles, 2)[OFFSET(1)] AS median_dist_nearest_fiber_miles,
     AVG(COALESCE(rd.radius_fiber_count, 0)) AS mean_radius_fiber_count,
     APPROX_QUANTILES(COALESCE(rd.radius_fiber_count, 0), 2)[OFFSET(1)] AS median_radius_fiber_count
 FROM parcel_to_ct p
 LEFT JOIN `clgx-gis-app-dev-06e3.teu_features.rextag_distance_parcel` rd
     ON p.parcel_shape_id = rd.parcel_shape_id
 GROUP BY 1;
+

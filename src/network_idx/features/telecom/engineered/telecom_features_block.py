@@ -31,13 +31,18 @@ from network_idx.config import (
     BQ_DATASET_FCC_SPEEDS,
     BQ_TABLE_FCC_SPEEDS_BLOCK,
 )
-from network_idx.constants import PROVIDER_LANDSCAPE_ORDER
+from network_idx.features.telecom.engineered._engineered_sql import (
+    render_engineered_telecom_sql,
+)
 from network_idx.utils import check_and_authenticate
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 SQL_PATH = Path(__file__).parent / "telecom_features_block.sql"
+
+# Passthrough identifier columns carried into the block feature table.
+BLOCK_KEY_COLUMNS = "block_geoid, state_fips, state_usps, county_geoid, tract_geoid, place_geoid"
 
 
 def output_table_ref() -> str:
@@ -59,29 +64,34 @@ def _landscape_ord_cases() -> str:
     """
     Render the provider-landscape label-to-ordinal WHEN clauses from the scoring contract.
 
-    Generating these from the single canonical ordering guarantees the ordinal written into
-    the block feature table matches the mapping the scorer relies on, so the two cannot
-    silently drift apart.
+    Delegates to the shared renderer so the block and tract features generate the ordinal
+    ladder from the same single source.
     """
-    return "\n        ".join(
-        f"WHEN '{label}' THEN {rank}" for label, rank in PROVIDER_LANDSCAPE_ORDER.items()
+    from network_idx.features.telecom.engineered._engineered_sql import (
+        render_landscape_ord_cases,
     )
+
+    return render_landscape_ord_cases()
 
 
 def render_sql(output_table: str, coverage_block_table: str, speeds_block_table: str) -> str:
     """
-    Render the telecom block-feature SQL with its tables and the generated ordinal ladder.
+    Render the telecom block-feature SQL from the shared engineered definition.
 
-    This is a pure function: it reads the SQL template, generates the label-to-ordinal WHEN
-    clauses from the scoring contract, and substitutes them together with the table names,
-    performing no input or output of its own so it can be unit tested.
+    This is a pure function: it reads the block-grain ``joined`` prelude, substitutes the
+    coverage and speeds block tables, and hands it to the shared engineered-telecom
+    renderer together with the block passthrough columns, performing no input or output of
+    its own so it can be unit tested. Keeping the four feature definitions in the shared
+    renderer means the block and tract telecom features cannot drift (ADR-0007).
     """
-    template = SQL_PATH.read_text()
-    return template.format(
-        output_table=output_table,
+    joined_prelude = SQL_PATH.read_text().format(
         coverage_block_table=coverage_block_table,
         speeds_block_table=speeds_block_table,
-        landscape_ord_cases=_landscape_ord_cases(),
+    )
+    return render_engineered_telecom_sql(
+        output_table=output_table,
+        joined_prelude=joined_prelude,
+        key_columns=BLOCK_KEY_COLUMNS,
     )
 
 
