@@ -47,37 +47,37 @@ that must finish first; steps sharing the same dependency may run in any order.
 read access) or only `DEV_PROJECT` tables produced by earlier steps.
 
 ```
-01 fixed_speeds ──────────────────────────────┐
-02 coverage_summary ──> 03 residuals           │
-                    └─> 04 coverage_block ──> 05 telecom_features ──┐
-06 growth_counts ──> 07 concentrations                             │
-                 └─> 08 hotspot_distance ──────────────────────────┤
-09 fiber_optimize ──> 10 fiber_distance ───────────────────────────┤
-11 population_change ───────────────────────────────────────────────┤
-07,08 ──> 12 location_growth_ct                                     │
-10 ─────> 13 rextag_distance_ct ───────────────────────────────────┤
+01 fixed_speeds ───────────────────────────────┐
+02 coverage_summary ──> 03 residuals ──> 04 coverage_block ──> 05 telecom_features ──┐
+06 growth_counts ──> 07 concentrations                                              │
+                 └─> 08 hotspot_distance ───────────────────────────────────────────┤
+09 fiber_optimize ──> 10 fiber_distance ────────────────────────────────────────────┤
+11 population_change ─────────────────────────────────────────────────────────────────┤
+07,08 ──> 12 location_growth_ct                                                      │
+10 ─────> 13 rextag_distance_ct ─────────────────────────────────────────────────────┤
                        └──> 14 parcel_features ──> 15 scaling_params
                                               └──> 16 parcel_score
 ```
+(05 also needs 01; 04 also needs 02 + census blocks.)
 
-| Seq | File | Reads | Depends on |
-|-----|------|-------|-----------|
-| 1 | `features/telecom/01_fcc_fixed_speeds_block.sql` | PROD | — |
-| 2 | `features/telecom/02_fcc_coverage_summary.sql` | PROD | — |
-| 3 | `features/telecom/03_fcc_coverage_county_residuals.sql` | DEV | 2 + census blocks |
-| 4 | `features/telecom/04_fcc_coverage_block.sql` | DEV | 2 + census blocks |
-| 5 | `features/telecom/05_telecom_features_block.sql` | DEV | 1, 4 |
-| 6 | `features/location/01_growth_counts.sql` | PROD | — |
-| 7 | `features/location/02_growth_concentrations.sql` | DEV | 6 |
-| 8 | `features/location/03_hotspot_distance.sql` | DEV | 6 |
-| 9 | `features/rextag/01_fiber_optimize.sql` | PROD | — |
-| 10 | `features/rextag/02_fiber_distance.sql` | PROD + DEV | 9, 6 |
-| 11 | `features/demographic/01_population_change.sql` | PROD | — |
-| 12 | `grain_transfer/01_location_growth_ct.sql` | PROD + DEV | 7, 8 |
-| 13 | `grain_transfer/02_rextag_distance_ct.sql` | PROD + DEV | 10 |
-| 14 | `features/parcel_features.sql` | DEV | 5, 7, 8, 10, 11, 12, 13 |
-| 15 | `scoring/01_scaling_params_scan.sql` | DEV | 14 |
-| 16 | `scoring/02_parcel_score.sql` | DEV | 14 + fitted weights/scaling |
+| Seq | File | Reads | Depends on | Produces (dataset.table) |
+|-----|------|-------|-----------|--------------------------|
+| 1 | `features/telecom/01_fcc_fixed_speeds_block.sql` | PROD | — | `teu_telecom.fcc_fixed_speeds_block` |
+| 2 | `features/telecom/02_fcc_coverage_summary.sql` | PROD | — | `teu_telecom.fcc_coverage_summary` |
+| 3 | `features/telecom/03_fcc_coverage_county_residuals.sql` | DEV | 2 + census blocks | `teu_telecom.fcc_coverage_county_residuals` |
+| 4 | `features/telecom/04_fcc_coverage_block.sql` | DEV | 2, 3 + census blocks | `teu_telecom.fcc_coverage_block` |
+| 5 | `features/telecom/05_telecom_features_block.sql` | DEV | 1, 4 | `teu_features.telecom_features_block` |
+| 6 | `features/location/01_growth_counts.sql` | PROD | — | `teu_features.loc_growth_cnts_parcel` |
+| 7 | `features/location/02_growth_concentrations.sql` | DEV | 6 | `teu_features.loc_growth_parcel_concentrations_h3r7` |
+| 8 | `features/location/03_hotspot_distance.sql` | DEV | 6 | `teu_features.loc_growth_distance_parcel` |
+| 9 | `features/rextag/01_fiber_optimize.sql` | PROD | — | `teu_telecom.int_rextag_fiberopticcables_optimized` |
+| 10 | `features/rextag/02_fiber_distance.sql` | PROD + DEV | 9, 6 | `teu_features.rextag_distance_parcel` |
+| 11 | `features/demographic/01_population_change.sql` | PROD | — | `teu_features.demo_pop_ct` |
+| 12 | `grain_transfer/01_location_growth_ct.sql` | PROD + DEV | 7, 8 | `teu_features.loc_parcels_growth_ct` |
+| 13 | `grain_transfer/02_rextag_distance_ct.sql` | PROD + DEV | 10 | `teu_features.rextag_distance_ct` |
+| 14 | `features/parcel_features.sql` | DEV | 5, 7, 8, 10, 11, 12, 13 | `teu_features.parcel_features` |
+| 15 | `scoring/01_scaling_params_scan.sql` | DEV | 14 | `teu_analytics.scaling_params` |
+| 16 | `scoring/02_parcel_score.sql` | DEV | 14 + fitted weights/scaling | `teu_outputs.parcel_scores` |
 
 Steps 3 & 4 read the Census block tables from Stage-0 in addition to step 2's
 `fcc_coverage_summary`.

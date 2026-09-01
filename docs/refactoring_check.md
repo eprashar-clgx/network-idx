@@ -25,24 +25,24 @@ Run each `sql/` script in the BigQuery console in this order, then report back s
 §5 gets updated. "After" = the step(s) that must land first. Prerequisite
 (census blocks) is already ✅ done. `Reads PROD` = needs prod read access.
 
-| Seq | `sql/` script | Reads | After |
-|-----|---------------|-------|-------|
-| 1 | `features/telecom/01_fcc_fixed_speeds_block.sql` | PROD | — |
-| 2 | `features/telecom/02_fcc_coverage_summary.sql` | PROD | — |
-| 3 | `features/telecom/03_fcc_coverage_county_residuals.sql` | DEV | 2 (+census ✅) |
-| 4 | `features/telecom/04_fcc_coverage_block.sql` | DEV | 2 (+census ✅) |
-| 5 | `features/telecom/05_telecom_features_block.sql` | DEV | 1, 4 |
-| 6 | `features/location/01_growth_counts.sql` | PROD | — |
-| 7 | `features/location/02_growth_concentrations.sql` | DEV | 6 |
-| 8 | `features/location/03_hotspot_distance.sql` | DEV | 6 |
-| 9 | `features/rextag/01_fiber_optimize.sql` | PROD | — |
-| 10 | `features/rextag/02_fiber_distance.sql` | PROD+DEV | 9, 6 |
-| 11 | `features/demographic/01_population_change.sql` | PROD | — |
-| 12 | `grain_transfer/01_location_growth_ct.sql` | PROD+DEV | 7, 8 |
-| 13 | `grain_transfer/02_rextag_distance_ct.sql` | PROD+DEV | 10 |
-| 14 | `features/parcel_features.sql` | DEV | 5, 7, 8, 10, 11, 12, 13 |
-| 15 | `scoring/01_scaling_params_scan.sql` | DEV | 14 |
-| 16 | `scoring/02_parcel_score.sql` | DEV | 14 + fitted weights/scaling |
+| Seq | `sql/` script | Reads | After | Produces (dataset.table) |
+|-----|---------------|-------|-------|--------------------------|
+| 1 | `features/telecom/01_fcc_fixed_speeds_block.sql` | PROD | — | `teu_telecom.fcc_fixed_speeds_block` |
+| 2 | `features/telecom/02_fcc_coverage_summary.sql` | PROD | — | `teu_telecom.fcc_coverage_summary` |
+| 3 | `features/telecom/03_fcc_coverage_county_residuals.sql` | DEV | 2 (+census ✅) | `teu_telecom.fcc_coverage_county_residuals` |
+| 4 | `features/telecom/04_fcc_coverage_block.sql` | DEV | 2, 3 (+census ✅) | `teu_telecom.fcc_coverage_block` |
+| 5 | `features/telecom/05_telecom_features_block.sql` | DEV | 1, 4 | `teu_features.telecom_features_block` |
+| 6 | `features/location/01_growth_counts.sql` | PROD | — | `teu_features.loc_growth_cnts_parcel` |
+| 7 | `features/location/02_growth_concentrations.sql` | DEV | 6 | `teu_features.loc_growth_parcel_concentrations_h3r7` |
+| 8 | `features/location/03_hotspot_distance.sql` | DEV | 6 | `teu_features.loc_growth_distance_parcel` |
+| 9 | `features/rextag/01_fiber_optimize.sql` | PROD | — | `teu_telecom.int_rextag_fiberopticcables_optimized` |
+| 10 | `features/rextag/02_fiber_distance.sql` | PROD+DEV | 9, 6 | `teu_features.rextag_distance_parcel` |
+| 11 | `features/demographic/01_population_change.sql` | PROD | — | `teu_features.demo_pop_ct` |
+| 12 | `grain_transfer/01_location_growth_ct.sql` | PROD+DEV | 7, 8 | `teu_features.loc_parcels_growth_ct` |
+| 13 | `grain_transfer/02_rextag_distance_ct.sql` | PROD+DEV | 10 | `teu_features.rextag_distance_ct` |
+| 14 | `features/parcel_features.sql` | DEV | 5, 7, 8, 10, 11, 12, 13 | `teu_features.parcel_features` |
+| 15 | `scoring/01_scaling_params_scan.sql` | DEV | 14 | `teu_analytics.scaling_params` |
+| 16 | `scoring/02_parcel_score.sql` | DEV | 14 + fitted weights/scaling | `teu_outputs.parcel_scores` |
 
 **Critical gate:** step 2 (`fcc_coverage_summary`) must land before steps 3 & 4.
 
@@ -52,11 +52,11 @@ Run each `sql/` script in the BigQuery console in this order, then report back s
 
 | # | Module | Run in | Dry-run verdict | Output table | Status |
 |---|--------|--------|-----------------|--------------|--------|
-| 1 | `features.telecom.transform.fcc_fixed_speeds_block` | CONSOLE | 403 prod (expected) | `teu_telecom.fcc_fixed_speeds_block` | 🟡 console-run pending |
-| 2 | `features.telecom.transform.fcc_coverage_summary` | CONSOLE | 403 prod (expected) | `teu_telecom.fcc_coverage_summary` | 🟡 console-run pending |
-| 3 | `features.telecom.transform.fcc_coverage_county_residuals` | VM | dep on step 2 | `teu_telecom.fcc_coverage_county_residuals` | 🟡 waits on `fcc_coverage_summary` |
-| 4 | `features.telecom.transform.fcc_coverage_block` | VM | dep on step 2 | `teu_telecom.fcc_coverage_block` | 🟡 waits on `fcc_coverage_summary` |
-| 5 | `features.telecom.engineered.telecom_features_block` | VM | ✅ bq-valid (0.85 GB) | `teu_features.telecom_features_block` | ✅ validated |
+| 1 | `features.telecom.transform.fcc_fixed_speeds_block` | CONSOLE | 403 prod (expected) | `teu_telecom.fcc_fixed_speeds_block` | ✅ run (5.94M rows) |
+| 2 | `features.telecom.transform.fcc_coverage_summary` | CONSOLE | 403 prod (expected) | `teu_telecom.fcc_coverage_summary` | ✅ run (35,304 rows) |
+| 3 | `features.telecom.transform.fcc_coverage_county_residuals` | VM | RUN ✅ | `teu_telecom.fcc_coverage_county_residuals` | ✅ run (3,232 rows) |
+| 4 | `features.telecom.transform.fcc_coverage_block` | VM | RUN ✅ | `teu_telecom.fcc_coverage_block` | ✅ run (8.17M rows) |
+| 5 | `features.telecom.engineered.telecom_features_block` | VM | RUN ✅ | `teu_features.telecom_features_block` | ✅ run (8.17M rows) |
 | 6 | `features.location.engineered.growth_counts` | CONSOLE | 403 prod (expected) | `teu_features.loc_growth_cnts_parcel` | 🟡 console-run pending |
 | 7 | `features.location.engineered.growth_concentrations` | VM | ✅ bq-valid (6.36 GB) | `teu_features.loc_growth_parcel_concentrations_h3r7` | ✅ validated |
 | 8 | `features.location.engineered.hotspot_distance` | VM | ✅ bq-valid (7.42 GB) | `teu_features.loc_growth_distance_parcel` | ✅ validated |
@@ -95,6 +95,20 @@ Monitoring and validation modules are pure Python (read + return); not SQL steps
   the body references a prod rextag view + boundary UDF; validate in the console.
   Not necessarily a code bug.
 
+- **F6 — Stale legacy output tables block `CREATE OR REPLACE` (found 2026-09-01).**
+  `teu_telecom.fcc_coverage_county_residuals` already exists from **legacy** code
+  (Apr 2026, 3,221 rows, old schema: `copper_speed_100_20`… with no `*_only`
+  columns). Two symptoms surfaced once `fcc_coverage_summary` landed:
+  step 3 fails with *"Cannot replace a table with a different partitioning"* and
+  step 4 fails with *"Unrecognized name: copper_speed_02_02_only"* (it reads the
+  stale legacy residuals table).
+  → Fix: **drop the stale table, then run step 3**:
+  `DROP TABLE \`clgx-gis-app-dev-06e3.teu_telecom.fcc_coverage_county_residuals\`;`
+  Watch for the same on other tables that predate this rebuild. **Confirmed
+  recurrence:** legacy `fcc_coverage_block` (8.1M rows, unclustered) blocks
+  step 4 the same way — drop it before running step 4. General rule: drop a stale
+  output table if a `CREATE OR REPLACE` errors on partitioning/spec.
+
 ## 3. Deliverables in flight
 
 - **DE raw-SQL folder (`sql/`) — 🟡 in progress.** One sub-folder per module with
@@ -122,4 +136,8 @@ what ran, the table produced, row count, and whether the schema matched expectat
 
 | Step | SQL file | Run at | Table produced | Rows | Schema OK | Notes |
 |------|----------|--------|----------------|------|-----------|-------|
-| _(none yet — census-block landing done via Python uploader, not a `sql/` file)_ | | | | | | |
+| 1 | `features/telecom/01_fcc_fixed_speeds_block.sql` | 2026-09-01 12:22Z | `teu_telecom.fcc_fixed_speeds_block` | 5,937,564 | ✅ | 15 cols: per-tech (copper/cable/fiber) location+provider counts and max down/up speeds. |
+| 2 | `features/telecom/02_fcc_coverage_summary.sql` | 2026-09-01 12:27Z | `teu_telecom.fcc_coverage_summary` | 35,304 | ✅ | 23 cols: geography_level/id/desc + total_units + per-tech speed-tier buckets (`*_only`). |
+| 3 | `features/telecom/03_fcc_coverage_county_residuals.sql` | 2026-09-01 12:34Z | `teu_telecom.fcc_coverage_county_residuals` | 3,232 | ✅ | Dropped stale legacy table first (F6). New schema: county keys + residual_units + place_count + per-tech `*_only` buckets. |
+| 4 | `features/telecom/04_fcc_coverage_block.sql` | 2026-09-01 12:37Z | `teu_telecom.fcc_coverage_block` | 8,174,955 | ✅ | Dropped legacy 8.1M table first (F6). Dasymetric block interpolation; clustered; one row per census block. |
+| 5 | `features/telecom/05_telecom_features_block.sql` | 2026-09-01 12:41Z | `teu_features.telecom_features_block` | 8,174,955 | ✅ | Engineered block features: cable_penetration, fiber_opportunity_gap, fiber_speed_top_tier, provider_competitive_landscape(+_ord). |
