@@ -92,6 +92,14 @@ def test_driver_creates_staging_table_if_not_exists():
     assert "CREATE TABLE IF NOT EXISTS `proj.ds.calc`" in sql
 
 
+def test_calc_table_creates_staging_table_with_string_fiber_id():
+    sql = fiber_distance.render_calc_table_sql(calc_table="proj.ds.calc")
+    assert "CREATE TABLE IF NOT EXISTS `proj.ds.calc`" in sql
+    assert "nearest_fiber_id STRING" in sql
+    assert "CLUSTER BY state_fips, parcel_shape_id" in sql
+    assert "{" not in sql and "}" not in sql
+
+
 def test_driver_has_no_unresolved_placeholders():
     sql = _driver()
     assert "{" not in sql and "}" not in sql
@@ -129,20 +137,22 @@ def test_assemble_call_targets_the_procedure():
 def test_build_deploys_three_then_calls_driver_and_assemble():
     client = FakeClient()
     fiber_distance.build(client=client)
-    assert len(client.queries) == 5
-    assert "CREATE OR REPLACE PROCEDURE" in client.queries[0]
+    assert len(client.queries) == 6
+    assert "CREATE TABLE IF NOT EXISTS" in client.queries[0]
     assert "CREATE OR REPLACE PROCEDURE" in client.queries[1]
     assert "CREATE OR REPLACE PROCEDURE" in client.queries[2]
-    assert client.queries[3].startswith("CALL")
-    assert "rextag_calculate_parcel_dist_to_fiber" in client.queries[3]
+    assert "CREATE OR REPLACE PROCEDURE" in client.queries[3]
     assert client.queries[4].startswith("CALL")
+    assert "rextag_calculate_parcel_dist_to_fiber" in client.queries[4]
+    assert client.queries[5].startswith("CALL")
 
 
 def test_build_deploy_only_does_not_call():
     client = FakeClient()
     fiber_distance.build(client=client, deploy_only=True)
-    assert len(client.queries) == 3
-    assert all("CREATE OR REPLACE PROCEDURE" in q for q in client.queries)
+    assert len(client.queries) == 4
+    assert "CREATE TABLE IF NOT EXISTS" in client.queries[0]
+    assert all("CREATE OR REPLACE PROCEDURE" in q for q in client.queries[1:])
 
 
 def test_build_dry_run_does_not_execute(capsys):

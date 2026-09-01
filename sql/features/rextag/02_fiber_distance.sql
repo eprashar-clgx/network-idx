@@ -2,13 +2,31 @@
 -- Sharded parcel distance-to-nearest-fiber (3 stored procedures).
 -- Module        : network_idx.features.rextag.engineered.fiber_distance
 -- Generated from : src/network_idx/features/rextag/engineered/fiber_distance.py  (python -m network_idx.features.rextag.engineered.fiber_distance --dry-run)
--- Run in         : CONSOLE (reads PROD parcel views)
+-- Run in         : VM / DEV-only (reads dev tables loc_growth_cnts_parcel + int_rextag_fiberopticcables_optimized; no direct PROD read)
 --
 -- PROJECT SUBSTITUTION (only these two identifiers change per environment):
 --   PROD_PROJECT = clgx-idap-bigquery-prd-a990   (raw source reads)
 --   DEV_PROJECT  = clgx-gis-app-dev-06e3         (feature/output writes)
 -- All dataset and table names are concrete. See sql/README.md for run order.
 -- =============================================================================
+
+-- Parcel-to-fiber distance: staging table definition (engineered feature).
+--
+-- Creates the sharded worker's staging table up front, before the worker procedure is
+-- deployed, so the worker's INSERT body validates at CREATE-PROCEDURE time even on a
+-- fresh environment where the table does not yet exist. It is idempotent (IF NOT
+-- EXISTS) so re-running the pipeline is safe; the driver clears rows per state on each
+-- run. nearest_fiber_id is a string because the fiber id is only stable within a single
+-- optimise run and is an auxiliary/QA field rather than a scoring feature.
+
+CREATE TABLE IF NOT EXISTS `clgx-gis-app-dev-06e3.teu_features.rextag_calculation_parcel` (
+  parcel_shape_id INT64,
+  state_fips STRING,
+  dist_to_nearest_fiber_m FLOAT64,
+  nearest_fiber_id STRING,
+  radius_fiber_count INT64,
+  processed_at TIMESTAMP
+) CLUSTER BY state_fips, parcel_shape_id;
 
 -- Parcel-to-fiber distance: sharded spatial worker (engineered feature).
 --

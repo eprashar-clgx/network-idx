@@ -54,6 +54,7 @@ logger = logging.getLogger(__name__)
 WORKER_SQL_PATH = Path(__file__).parent / "fiber_distance_worker.sql"
 DRIVER_SQL_PATH = Path(__file__).parent / "fiber_distance_driver.sql"
 ASSEMBLE_SQL_PATH = Path(__file__).parent / "fiber_distance_assemble.sql"
+CALC_TABLE_SQL_PATH = Path(__file__).parent / "fiber_distance_calc_table.sql"
 
 # Unqualified names of the three stored procedures this module deploys.
 WORKER_PROCEDURE_NAME = "rextag_run_spatial_shard_worker"
@@ -145,6 +146,18 @@ def render_worker_sql(
         parcel_table=parcel_table,
         fiber_optimized_table=fiber_optimized_table,
     )
+
+
+def render_calc_table_sql(calc_table: str) -> str:
+    """
+    Render the CREATE TABLE IF NOT EXISTS statement for the worker's staging table.
+
+    This is a pure function: it reads the staging-table template and substitutes the
+    table name. The staging table is created before the worker procedure is deployed so
+    the worker's INSERT body validates at CREATE-PROCEDURE time on a fresh environment.
+    """
+    template = CALC_TABLE_SQL_PATH.read_text()
+    return template.format(calc_table=calc_table)
 
 
 def render_driver_sql(
@@ -248,6 +261,7 @@ def build(
         parcel_table=parcel_table_ref(),
         fiber_optimized_table=fiber_optimized_table_ref(),
     )
+    calc_table_sql = render_calc_table_sql(calc_table=calc_table_ref())
     driver_sql = render_driver_sql(
         driver_proc=driver_proc_ref(),
         worker_proc=worker_proc_ref(),
@@ -272,6 +286,7 @@ def build(
 
     if dry_run:
         logger.info("Dry run — rendered procedures and calls:")
+        print(calc_table_sql)
         print(worker_sql)
         print(driver_sql)
         print(assemble_sql)
@@ -282,6 +297,8 @@ def build(
     if client is None:
         client = get_bq_client()
 
+    logger.info("Creating staging table if not exists...")
+    client.query(calc_table_sql).result()
     logger.info("Deploying worker procedure...")
     client.query(worker_sql).result()
     logger.info("Deploying driver procedure...")
