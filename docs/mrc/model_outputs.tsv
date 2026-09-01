@@ -1,0 +1,31 @@
+Variable Family	Variable Name	Definition	Data Type
+Identifiers & Geography	parcel_shape_id	Parcel unique identifier (scoring grain)	INT64
+Identifiers & Geography	geometry	Parcel polygon geometry	GEOGRAPHY
+Identifiers & Geography	census_block_id	Census block GEOID containing the parcel	STRING
+Identifiers & Geography	h3_id	H3 resolution-8 cell id	STRING
+Identifiers & Geography	nearest_fiber_id	Id of the nearest Rextag fiber line	STRING
+Indices (0-100)	fiber_potential_index	Overall fiber build-out opportunity score	FLOAT64
+Indices (0-100)	telecom_index	Broadband-market opportunity sub-index	FLOAT64
+Indices (0-100)	demographic_index	Population & housing base sub-index	FLOAT64
+Indices (0-100)	growth_index	Development/growth-momentum sub-index	FLOAT64
+Bucket Weights (%)	telecom_weight	Telecom bucket weight, % (0-100)	FLOAT64
+Bucket Weights (%)	demographic_weight	Demographic bucket weight, % (0-100)	FLOAT64
+Bucket Weights (%)	growth_weight	Growth bucket weight, % (0-100)	FLOAT64
+Raw Feature Values	pop_ch_avg	Avg annual population change (tract)	FLOAT64
+Raw Feature Values	pop_pctch_avg	Avg annual population % change (tract)	FLOAT64
+Raw Feature Values	census_housing_units	Housing units in the census block	INT64
+Raw Feature Values	landuse_change_qtr_mi_cnt	Land-use-change parcels within 1/4 mile	INT64
+Raw Feature Values	pre_early_dev_qtr_mi_cnt	Pre/early-development parcels within 1/4 mile	INT64
+Raw Feature Values	bldr_dev_qtr_mi_cnt	Builder/developer parcels within 1/4 mile	INT64
+Raw Feature Values	new_permit_qtr_mi_cnt	New-permit parcels within 1/4 mile	INT64
+Raw Feature Values	dist_nearest_hotspot_miles	Distance (miles) to nearest growth hotspot	FLOAT64
+Raw Feature Values	cable_penetration	Cable-served share of block housing	FLOAT64
+Raw Feature Values	fiber_opportunity_gap	Unserved fiber share of block housing	FLOAT64
+Raw Feature Values	fiber_speed_top_tier	Top-tier (1000/100) fiber presence, gated	FLOAT64
+Raw Feature Values	dist_nearest_fiber_miles	Distance (miles) to nearest fiber line	FLOAT64
+Raw Feature Values	provider_competitive_landscape_type_code	Competitive-landscape ordinal, '00'-'06'	STRING
+Scaled Feature Values (0-1)	<feature>_scaled	Each of the 13 features scaled to 0-1 (inverted where flagged), frozen per run	FLOAT64
+Within-Bucket Weights (%)	<feature>_weight	Each of the 13 features' within-bucket weight, % (0-100)	FLOAT64
+Additional Raw	growth_parcels_qtr_mi_cnt	Count of growth parcels within 1/4 mile	INT64
+Run Metadata	run_id	Model run identifier (lightgbm_k8_v1)	STRING
+Run Metadata	created_at	Row generation timestamp	TIMESTAMP

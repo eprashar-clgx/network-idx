@@ -1,0 +1,41 @@
+flowchart TB
+    subgraph SRC["Data Sources (BigQuery-prod)"]
+        S1["FCC Fixed Broadband<br/>(coverage + speeds)"]
+        S2["NeighborhoodScout<br/>(population)"]
+        S3["Property / Growth Intel<br/>Parcel Universe"]
+        S4["Rextag Fiber Lines"]
+        S5["Census BAF + ACL<br/>(crosswalk, housing)"]
+    end
+
+    SRC --> FE["Feature Engineering<br/>13 features @ native grain<br/>growth-parcel · telecom-block · demo-tract"]
+
+    FE --> A["TRACK A — Weight Derivation<br/>(census-tract grain)"]
+    FE --> B["TRACK B — Index Scoring<br/>(lowest native grain)"]
+
+    subgraph AA["A · learn the weights"]
+        A --> A1["Correlation prune<br/>(drop collinear)"]
+        A1 --> A2["K-means clustering<br/>(k = 8 market archetypes)"]
+        A2 --> A3["LightGBM classifier<br/>predict cluster label"]
+        A3 --> A4["SHAP - mean(|SHAP|)<br/>= feature weights"]
+    end
+
+    subgraph BB["B · build the scores"]
+        B --> B1["Scale each feature to [0,1]<br/>country-wide min-max<br/>invert where flagged"]
+    end
+
+    A4 -->|weights| SCORE["SCORING<br/>within-bucket weighted sum to 3 sub-indices (0-100)<br/>bucket-weighted avg to fiber_potential_index (0-100)"]
+    B1 -->|scaled features| SCORE
+
+    SCORE --> OUT["fiber_idx_v1_parcel<br/>1 row / parcel · overall + growth/telecom/demo sub-indices<br/>+ raw & scaled features + weights"]
+
+    classDef src fill:#e3f2fd,stroke:#1565c0,color:#0d47a1;
+    classDef trackA fill:#fff3e0,stroke:#e65100,color:#bf360c;
+    classDef trackB fill:#e8f5e9,stroke:#2e7d32,color:#1b5e20;
+    classDef score fill:#f3e5f5,stroke:#6a1b9a,color:#4a148c;
+    classDef out fill:#fce4ec,stroke:#ad1457,color:#880e4f;
+
+    class S1,S2,S3,S4,S5 src;
+    class A,A1,A2,A3,A4 trackA;
+    class B,B1 trackB;
+    class SCORE score;
+    class OUT out;
