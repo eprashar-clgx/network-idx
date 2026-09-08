@@ -9,7 +9,7 @@ Indices (0-100)	telecom_index	Broadband-market opportunity sub-index	FLOAT64
 Indices (0-100)	demographic_index	Population & housing base sub-index	FLOAT64
 Indices (0-100)	growth_index	Development/growth-momentum sub-index	FLOAT64
 Bucket Weights (%)	telecom_weight	Telecom bucket weight, % (0-100)	FLOAT64
-Bucket Weights (%)	demographic_weight	Demographic bucket weight, % (0-100)	FLOAT64
+Bucket Weights (%)	demographic_weight	Population & Housing bucket weight, % (0-100)	FLOAT64
 Bucket Weights (%)	growth_weight	Growth bucket weight, % (0-100)	FLOAT64
 Raw Feature Values	pop_ch_avg	Avg annual population change (tract)	FLOAT64
 Raw Feature Values	pop_pctch_avg	Avg annual population % change (tract)	FLOAT64

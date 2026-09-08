@@ -1,0 +1,63 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><style>
+  *{box-sizing:border-box;}
+  body{margin:0;padding:34px 32px;font-family:'Segoe UI',Arial,sans-serif;background:#fff;}
+  #wrap{width:1160px;position:relative;}
+  .title{font-size:23px;font-weight:800;color:#283593;margin:0 0 3px;}
+  .sub{font-size:14px;color:#607d8b;margin:0 0 18px;}
+  .cols{display:flex;justify-content:space-between;gap:18px;}
+  .col{flex:1;}
+  .head{color:#fff;border-radius:12px 12px 0 0;padding:13px 16px;
+        box-shadow:0 2px 8px rgba(0,0,0,.12);}
+  .head .k{font-size:11.5px;font-weight:700;letter-spacing:1.5px;opacity:.85;text-transform:uppercase;}
+  .head .n{font-size:19px;font-weight:800;margin-top:2px;}
+  .body{background:#fff;border:1px solid #e0e0e0;border-top:none;border-radius:0 0 12px 12px;
+        padding:8px 8px 12px;box-shadow:0 1px 3px rgba(0,0,0,.06);height:100%;}
+  ul{margin:0;padding:6px 14px 0 26px;}
+  li{font-size:13.8px;color:#37474f;line-height:1.5;margin-bottom:11px;}
+  li b{color:#263238;}
+  .mono{font-family:Consolas,Menlo,monospace;font-size:12.5px;color:#546e7a;}
+  .fe .head{background:#5e35b1;} .fe .body{border-color:#d1c4e9;}
+  .sc .head{background:#1565c0;} .sc .body{border-color:#bbdefb;}
+  .sr .head{background:#00897b;} .sr .body{border-color:#80cbc4;}
+</style></head>
+<body>
+<div id="wrap">
+  <div class="title">Appendix &middot; How raw features become scores</div>
+  <div class="sub">Fiber Potential Index v1 &middot; rules frozen per run <span class="mono">lightgbm_k8_v1</span></div>
+
+  <div class="cols">
+    <!-- Feature engineering -->
+    <div class="col fe">
+      <div class="head"><div class="k">Step 1</div><div class="n">Feature engineering</div></div>
+      <div class="body"><ul>
+        <li><b>Missing / infinite values imputed by rule</b> &mdash; e.g. <span class="mono">cable_penetration</span> &rarr; 0, <span class="mono">fiber_opportunity_gap</span> &rarr; 1.0, growth counts &rarr; 0; distances fill at a data-derived cap.</li>
+        <li><b>Convention:</b> &ldquo;missing = far / unserved = lowest opportunity&rdquo; &mdash; null-filled distances sit at the cap, giving the lowest score.</li>
+        <li><b>Winsorize long tails</b> &mdash; growth counts have a fat right tail, capped at the <b>99.5th percentile</b>.</li>
+        <li><b>Domain bounds</b> &mdash; proportion features clipped to <b>[0, 1]</b> (<span class="mono">cable_penetration</span>, <span class="mono">fiber_opportunity_gap</span>); raw unclipped value kept for monitoring.</li>
+      </ul></div>
+    </div>
+
+    <!-- Scaling -->
+    <div class="col sc">
+      <div class="head"><div class="k">Step 2</div><div class="n">Scaling</div></div>
+      <div class="body"><ul>
+        <li><b>Country-wide min&ndash;max to [0, 1]</b> for scoring, so every feature shares a common range; <b>frozen per <span class="mono">run_id</span></b> for reproducibility.</li>
+        <li><b>5 features inverted</b> (lower raw = higher opportunity): distance to nearest hotspot &amp; fiber, cable penetration, top-tier fiber speed, provider competitive landscape.</li>
+        <li><b>Clustering scales differently</b> &mdash; it uses <b>z-scores</b> (StandardScaler), not min&ndash;max, because that step compares feature shapes, not a bounded 0&ndash;100 score.</li>
+      </ul></div>
+    </div>
+
+    <!-- Scoring -->
+    <div class="col sr">
+      <div class="head"><div class="k">Step 3</div><div class="n">Scoring</div></div>
+      <div class="body"><ul>
+        <li><b>Sub-index (0&ndash;100)</b> = within-bucket weighted sum of scaled features, rescaled 0&ndash;100 &mdash; <span class="mono">telecom_index</span>, <span class="mono">pop_housing_index</span>, <span class="mono">growth_index</span>.</li>
+        <li><b>Overall score (0&ndash;100)</b> = weighted average of the three sub-indices:<br>
+            <span class="mono">0.591&middot;telecom + 0.240&middot;pop_housing + 0.169&middot;growth</span>.</li>
+        <li>Weights come from the model (mean&nbsp;|SHAP|), not hand-picked &mdash; delivered as <span class="mono">fiber_potential_index</span>.</li>
+      </ul></div>
+    </div>
+  </div>
+</div>
+</body></html>

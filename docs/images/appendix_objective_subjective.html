@@ -1,0 +1,74 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><style>
+  *{box-sizing:border-box;}
+  body{margin:0;padding:34px 32px;font-family:'Segoe UI',Arial,sans-serif;background:#fff;}
+  #wrap{width:1160px;position:relative;}
+  .title{font-size:23px;font-weight:800;color:#283593;margin:0 0 3px;}
+  .sub{font-size:14px;color:#607d8b;margin:0 0 18px;}
+  table{border-collapse:separate;border-spacing:0;width:100%;box-shadow:0 2px 10px rgba(0,0,0,.10);
+        border-radius:12px;overflow:hidden;}
+  th{color:#fff;font-size:14px;font-weight:700;text-align:left;padding:13px 16px;letter-spacing:.3px;}
+  th.stage{background:#283593;width:210px;}
+  th.obj{background:#1b5e20;}
+  th.subj{background:#e65100;}
+  td{padding:12px 16px;font-size:14px;color:#37474f;line-height:1.45;border-top:1px solid #eceff1;vertical-align:top;}
+  td.stage{font-weight:700;color:#263238;background:#f4f6fb;}
+  td.obj{background:#f1f8f2;}
+  td.subj{background:#fff6ef;}
+  .mono{font-family:Consolas,Menlo,monospace;font-size:12.5px;color:#546e7a;}
+  .dash{color:#b0bec5;font-weight:700;}
+</style></head>
+<body>
+<div id="wrap">
+  <div class="title">Appendix &middot; Objective vs. subjective calls by modeling stage</div>
+  <div class="sub">What the data decides vs. where analyst judgment enters &mdash; Fiber Potential Index v1</div>
+
+  <table>
+    <tr>
+      <th class="stage">Modeling stage</th>
+      <th class="obj">Objective &mdash; data-driven</th>
+      <th class="subj">Subjective &mdash; analyst judgment</th>
+    </tr>
+    <tr>
+      <td class="stage">Feature engineering &amp; screening</td>
+      <td class="obj">Correlation values; feature distributions; which features are empirically redundant</td>
+      <td class="subj">Which features to include; correlation cutoff for dropping</td>
+    </tr>
+    <tr>
+      <td class="stage">Missing / outlier treatment</td>
+      <td class="obj">Percentile / max values used for caps (P99, max)</td>
+      <td class="subj">Choice of fills (0 vs 1.0 vs cap); winsorize percentile (99.5); &ldquo;missing = far / unserved&rdquo; convention</td>
+    </tr>
+    <tr>
+      <td class="stage">Scaling / normalization</td>
+      <td class="obj">The computed min/max and z-scores</td>
+      <td class="subj">Min&ndash;max (scoring) vs z-score (clustering) choice; freezing stats per run</td>
+    </tr>
+    <tr>
+      <td class="stage">Clustering</td>
+      <td class="obj">Cluster assignments (deterministic given features + k)</td>
+      <td class="subj">Choice of k (=8); use of k-means; feature set</td>
+    </tr>
+    <tr>
+      <td class="stage">Classification &amp; SHAP</td>
+      <td class="obj">Model fit; SHAP importances</td>
+      <td class="subj">Model family (minor; SHAP robust)</td>
+    </tr>
+    <tr>
+      <td class="stage">Weight construction</td>
+      <td class="obj">Raw <span class="mono">mean(|SHAP|)</span> importances</td>
+      <td class="subj">SHAP-as-weights choice; normalization into bucket / within-bucket views</td>
+    </tr>
+    <tr>
+      <td class="stage">Scoring / aggregation</td>
+      <td class="obj">The weighted-sum arithmetic; 0&ndash;100 rescale</td>
+      <td class="subj">Weighted-average-of-sub-indices vs flat sum; linear vs geometric</td>
+    </tr>
+    <tr>
+      <td class="stage">Opportunity direction</td>
+      <td class="obj"><span class="dash">&mdash;</span></td>
+      <td class="subj">Which features are inverted (business definition of &ldquo;opportunity&rdquo;)</td>
+    </tr>
+  </table>
+</div>
+</body></html>

@@ -1,0 +1,83 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><style>
+  *{box-sizing:border-box;}
+  body{margin:0;padding:34px 32px;font-family:'Segoe UI',Arial,sans-serif;background:#fff;}
+  #wrap{width:1120px;position:relative;}
+  .title{font-size:23px;font-weight:800;color:#283593;margin:0 0 4px;}
+  .sub{font-size:14px;color:#607d8b;margin:0 0 18px;}
+  table{border-collapse:separate;border-spacing:0;width:100%;box-shadow:0 2px 10px rgba(0,0,0,.10);
+        border-radius:12px;overflow:hidden;}
+  th{background:#283593;color:#fff;font-size:14px;font-weight:700;text-align:left;
+     padding:13px 16px;letter-spacing:.3px;}
+  td{padding:13px 16px;font-size:14.5px;color:#37474f;line-height:1.42;border-top:1px solid #eceff1;
+     vertical-align:top;}
+  tr:nth-child(even) td{background:#f7f9fc;}
+  td.check{font-weight:700;color:#263238;width:200px;}
+  td.res{width:210px;font-weight:700;}
+  .mono{font-family:Consolas,Menlo,monospace;font-size:13px;color:#546e7a;}
+  .pass{color:#1b5e20;} .pass:before{content:"\2713  ";}
+  .warn{color:#e65100;} .warn:before{content:"\26A0  ";}
+  .na{color:#78909c;} .na:before{content:"\2014  ";}
+  .foot{display:flex;gap:16px;margin-top:20px;}
+  .card{flex:1;border-radius:11px;padding:15px 18px;box-shadow:0 1px 4px rgba(0,0,0,.08);}
+  .lim{background:#fff8e1;border:1px solid #ffe082;}
+  .nxt{background:#e8f5e9;border:1px solid #a5d6a7;}
+  .card h4{margin:0 0 7px;font-size:14px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;}
+  .lim h4{color:#e65100;} .nxt h4{color:#1b5e20;}
+  .card p{margin:0;font-size:14px;color:#37474f;line-height:1.5;}
+  .card ul{margin:0;padding-left:18px;font-size:14px;color:#37474f;line-height:1.55;}
+</style></head>
+<body>
+<div id="wrap">
+  <div class="title">Pre-production validation scorecard</div>
+  <div class="sub">Fiber Potential Index v1 &middot; run <span class="mono">lightgbm_k8_v1</span></div>
+
+  <table>
+    <tr><th>Check</th><th>What we tested</th><th>Result</th></tr>
+    <tr>
+      <td class="check">Cluster stability</td>
+      <td>Groupings stayed stable as the number of clusters varied; cluster <span class="mono">z-score</span> profiles told a sensible, real-world story.</td>
+      <td class="res pass">Passed</td>
+    </tr>
+    <tr>
+      <td class="check">Input balance</td>
+      <td>Growth&ndash;overall correlation was &asymp;&nbsp;0.95 in early runs; weights rebalanced so no single feature dominates the index.</td>
+      <td class="res pass">Passed</td>
+    </tr>
+    <tr>
+      <td class="check">Feature relevance</td>
+      <td>The three most important drivers are all fiber-based (FCC + Rextag): fiber opportunity gap, top-tier fiber speed, distance to nearest fiber.</td>
+      <td class="res pass">Passed</td>
+    </tr>
+    <tr>
+      <td class="check">External consistency</td>
+      <td>Compared index values to public FCC broadband-funding data across selected urban, semi-urban, and rural areas.</td>
+      <td class="res pass">Directionally consistent</td>
+    </tr>
+    <tr>
+      <td class="check">Known limitation</td>
+      <td>Some inputs (e.g. <span class="mono">fiber_speed_top_tier</span>) are spread across areas via dasymetric interpolation, so they miss street- / neighborhood-level differences.</td>
+      <td class="res warn">Documented</td>
+    </tr>
+    <tr>
+      <td class="check">Legacy benchmark</td>
+      <td>v1 is the first production version; the earlier Random-Forest exploration was not retained, so there is no prior model to benchmark against.</td>
+      <td class="res na">Not applicable</td>
+    </tr>
+  </table>
+
+  <div class="foot">
+    <div class="card lim">
+      <h4>Key limitation</h4>
+      <p>Interpolated inputs limit resolution &mdash; the index is reliable at market / area level, not for fine street-level distinctions within an area.</p>
+    </div>
+    <div class="card nxt">
+      <h4>Next steps</h4>
+      <ul>
+        <li><b>Internal robustness:</b> measure how much parcel rankings shift under alternative weighting, normalization, and aggregation choices.</li>
+        <li><b>Expert review:</b> share high- and low-scoring parcels for blind face-validity review.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+</body></html>

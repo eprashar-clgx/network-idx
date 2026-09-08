@@ -1,0 +1,9 @@
+Modeling Stage	Objective (data-driven)	Subjective (analyst judgment)
+Feature engineering & screening	Correlation values; feature distributions; which features are empirically redundant	Which features to include; correlation cutoff for dropping
+Missing / outlier treatment	Percentile / max values used for caps (P99, max)	Choice of fills (0 vs 1.0 vs cap); winsorize percentile (99.5); 'missing = far/unserved' convention
+Scaling / normalization	The computed min/max and z-scores	Min-max (scoring) vs z-score (clustering) choice; freezing stats per run
+Clustering	Cluster assignments (deterministic given features + k)	Choice of k (=8); use of k-means; feature set
+Classification & SHAP	Model fit; SHAP importances	Model family (minor; SHAP robust)
+Weight construction	Raw mean(|SHAP|) importances	SHAP-as-weights choice; normalization into bucket / within-bucket views
+Scoring / aggregation	The weighted-sum arithmetic; 0-100 rescale	Weighted-average-of-sub-indices vs flat sum; linear vs geometric
+Opportunity direction	-	Which features are inverted (business definition of 'opportunity')

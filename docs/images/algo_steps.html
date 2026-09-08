@@ -1,0 +1,130 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><style>
+  * { box-sizing: border-box; }
+  body { margin:0; padding:36px 30px; font-family:'Segoe UI',Arial,sans-serif; background:#ffffff; }
+  .flow { display:flex; align-items:stretch; gap:0; }
+  .card { width:320px; border-radius:14px; overflow:hidden; box-shadow:0 3px 10px rgba(0,0,0,0.10);
+          display:flex; flex-direction:column; border:1px solid #e0e0e0; }
+  .hdr { padding:14px 16px; color:#fff; font-weight:700; font-size:19px; letter-spacing:.2px; }
+  .step-num { display:block; font-size:12.5px; font-weight:600; opacity:.85; letter-spacing:1px; text-transform:uppercase; margin-bottom:2px; }
+  .art { flex:1; display:flex; align-items:center; justify-content:center; padding:18px 12px 10px; background:#fff; }
+  .cap { padding:12px 16px 18px; font-size:15px; line-height:1.35; color:#37474f; background:#fafafa; border-top:1px solid #eee; min-height:78px; }
+  .arrow { display:flex; align-items:center; justify-content:center; width:56px; flex:0 0 56px; }
+  .arrow svg { display:block; }
+  /* step colors */
+  .c1 .hdr{ background:#1565c0; } .c1 .cap{ background:#e8f1fb; }
+  .c2 .hdr{ background:#00897b; } .c2 .cap{ background:#e3f4f1; }
+  .c3 .hdr{ background:#ef6c00; } .c3 .cap{ background:#fdefe2; }
+  .c4 .hdr{ background:#6a1b9a; } .c4 .cap{ background:#f3e9f8; }
+</style></head>
+<body>
+<div class="flow" id="flow">
+
+  <!-- STEP 1: Correlation / Descriptive stats -->
+  <div class="card c1">
+    <div class="hdr"><span class="step-num">Step 1</span>Correlation &amp; Descriptive Stats</div>
+    <div class="art">
+      <svg width="230" height="150" viewBox="0 0 230 150">
+        <!-- 5x5 correlation heatmap -->
+        <g transform="translate(65,6)">
+          <!-- row 0 --><rect x="0"  y="0"  width="21" height="21" fill="#b71c1c"/><rect x="22" y="0"  width="21" height="21" fill="#e53935"/><rect x="44" y="0"  width="21" height="21" fill="#ffcdd2"/><rect x="66" y="0"  width="21" height="21" fill="#90caf9"/><rect x="88" y="0"  width="21" height="21" fill="#42a5f5"/>
+          <!-- row 1 --><rect x="0"  y="22" width="21" height="21" fill="#e53935"/><rect x="22" y="22" width="21" height="21" fill="#b71c1c"/><rect x="44" y="22" width="21" height="21" fill="#fce4ec"/><rect x="66" y="22" width="21" height="21" fill="#64b5f6"/><rect x="88" y="22" width="21" height="21" fill="#90caf9"/>
+          <!-- row 2 --><rect x="0"  y="44" width="21" height="21" fill="#ffcdd2"/><rect x="22" y="44" width="21" height="21" fill="#fce4ec"/><rect x="44" y="44" width="21" height="21" fill="#b71c1c"/><rect x="66" y="44" width="21" height="21" fill="#ef9a9a"/><rect x="88" y="44" width="21" height="21" fill="#ffcdd2"/>
+          <!-- row 3 --><rect x="0"  y="66" width="21" height="21" fill="#90caf9"/><rect x="22" y="66" width="21" height="21" fill="#64b5f6"/><rect x="44" y="66" width="21" height="21" fill="#ef9a9a"/><rect x="66" y="66" width="21" height="21" fill="#b71c1c"/><rect x="88" y="66" width="21" height="21" fill="#e57373"/>
+          <!-- row 4 --><rect x="0"  y="88" width="21" height="21" fill="#42a5f5"/><rect x="22" y="88" width="21" height="21" fill="#90caf9"/><rect x="44" y="88" width="21" height="21" fill="#ffcdd2"/><rect x="66" y="88" width="21" height="21" fill="#e57373"/><rect x="88" y="88" width="21" height="21" fill="#b71c1c"/>
+          <rect x="0" y="0" width="109" height="109" fill="none" stroke="#455a64" stroke-width="1"/>
+        </g>
+        <text x="115" y="132" text-anchor="middle" font-size="12" fill="#607d8b" font-family="Segoe UI">feature × feature correlation</text>
+      </svg>
+    </div>
+    <div class="cap">Tells us which features are redundant; how to treat extremes.</div>
+  </div>
+
+  <div class="arrow"><svg width="40" height="30"><path d="M2 15 H30" stroke="#90a4ae" stroke-width="4" fill="none"/><path d="M28 6 L40 15 L28 24 Z" fill="#90a4ae"/></svg></div>
+
+  <!-- STEP 2: Cluster tracts -->
+  <div class="card c2">
+    <div class="hdr"><span class="step-num">Step 2</span>Cluster Census Tracts</div>
+    <div class="art">
+      <svg width="230" height="150" viewBox="0 0 230 150">
+        <!-- three clusters of dots -->
+        <g>
+          <!-- cluster A (blue) top-left -->
+          <g fill="#1565c0">
+            <circle cx="45" cy="35" r="6"/><circle cx="62" cy="28" r="6"/><circle cx="55" cy="48" r="6"/><circle cx="38" cy="52" r="6"/><circle cx="70" cy="45" r="6"/><circle cx="52" cy="18" r="6"/>
+          </g>
+          <ellipse cx="54" cy="37" rx="34" ry="30" fill="none" stroke="#1565c0" stroke-dasharray="4 4" stroke-width="1.5" opacity="0.6"/>
+          <!-- cluster B (orange) right -->
+          <g fill="#ef6c00">
+            <circle cx="165" cy="45" r="6"/><circle cx="182" cy="38" r="6"/><circle cx="175" cy="58" r="6"/><circle cx="190" cy="55" r="6"/><circle cx="158" cy="60" r="6"/><circle cx="178" cy="72" r="6"/>
+          </g>
+          <ellipse cx="174" cy="55" rx="30" ry="28" fill="none" stroke="#ef6c00" stroke-dasharray="4 4" stroke-width="1.5" opacity="0.6"/>
+          <!-- cluster C (green) bottom-center -->
+          <g fill="#2e7d32">
+            <circle cx="95" cy="105" r="6"/><circle cx="112" cy="112" r="6"/><circle cx="105" cy="95" r="6"/><circle cx="122" cy="100" r="6"/><circle cx="90" cy="120" r="6"/><circle cx="118" cy="122" r="6"/>
+          </g>
+          <ellipse cx="106" cy="109" rx="32" ry="26" fill="none" stroke="#2e7d32" stroke-dasharray="4 4" stroke-width="1.5" opacity="0.6"/>
+        </g>
+        <text x="115" y="147" text-anchor="middle" font-size="12" fill="#607d8b" font-family="Segoe UI">k = 8 market archetypes</text>
+      </svg>
+    </div>
+    <div class="cap">Group Census Tracts using engineered features.</div>
+  </div>
+
+  <div class="arrow"><svg width="40" height="30"><path d="M2 15 H30" stroke="#90a4ae" stroke-width="4" fill="none"/><path d="M28 6 L40 15 L28 24 Z" fill="#90a4ae"/></svg></div>
+
+  <!-- STEP 3: Classify -->
+  <div class="card c3">
+    <div class="hdr"><span class="step-num">Step 3</span>Classify Tract Groups</div>
+    <div class="art">
+      <svg width="230" height="150" viewBox="0 0 230 150">
+        <!-- shaded decision regions -->
+        <g>
+          <polygon points="0,0 130,0 60,134 0,134" fill="#1565c0" opacity="0.10"/>
+          <polygon points="130,0 230,0 230,60 60,134" fill="#ef6c00" opacity="0.10"/>
+          <polygon points="60,134 230,60 230,134" fill="#2e7d32" opacity="0.12"/>
+          <!-- boundaries -->
+          <line x1="130" y1="0" x2="60" y2="134" stroke="#e65100" stroke-width="2" stroke-dasharray="6 4"/>
+          <line x1="60" y1="134" x2="230" y2="60" stroke="#e65100" stroke-width="2" stroke-dasharray="6 4"/>
+          <!-- dots colored by predicted group -->
+          <g fill="#1565c0"><circle cx="40" cy="40" r="5.5"/><circle cx="55" cy="70" r="5.5"/><circle cx="30" cy="95" r="5.5"/><circle cx="70" cy="30" r="5.5"/></g>
+          <g fill="#ef6c00"><circle cx="160" cy="30" r="5.5"/><circle cx="185" cy="45" r="5.5"/><circle cx="150" cy="55" r="5.5"/><circle cx="200" cy="30" r="5.5"/></g>
+          <g fill="#2e7d32"><circle cx="150" cy="100" r="5.5"/><circle cx="180" cy="112" r="5.5"/><circle cx="200" cy="95" r="5.5"/><circle cx="165" cy="122" r="5.5"/></g>
+        </g>
+        <text x="115" y="147" text-anchor="middle" font-size="12" fill="#607d8b" font-family="Segoe UI">LightGBM predicts the group</text>
+      </svg>
+    </div>
+    <div class="cap">Use a classification model to predict tract grouping.</div>
+  </div>
+
+  <div class="arrow"><svg width="40" height="30"><path d="M2 15 H30" stroke="#90a4ae" stroke-width="4" fill="none"/><path d="M28 6 L40 15 L28 24 Z" fill="#90a4ae"/></svg></div>
+
+  <!-- STEP 4: SHAP weights -->
+  <div class="card c4">
+    <div class="hdr"><span class="step-num">Step 4</span>SHAP Feature Weights</div>
+    <div class="art">
+      <svg width="230" height="150" viewBox="0 0 230 150">
+        <!-- horizontal SHAP bar chart -->
+        <g font-family="Segoe UI" font-size="10.5" fill="#455a64">
+          <line x1="70" y1="8" x2="70" y2="132" stroke="#b0bec5" stroke-width="1.5"/>
+          <!-- bars -->
+          <rect x="70" y="12"  width="140" height="17" rx="3" fill="#6a1b9a"/>
+          <rect x="70" y="36"  width="116" height="17" rx="3" fill="#8e24aa"/>
+          <rect x="70" y="60"  width="86"  height="17" rx="3" fill="#ab47bc"/>
+          <rect x="70" y="84"  width="58"  height="17" rx="3" fill="#ba68c8"/>
+          <rect x="70" y="108" width="38"  height="17" rx="3" fill="#ce93d8"/>
+          <!-- labels -->
+          <text x="66" y="24"  text-anchor="end">fiber gap</text>
+          <text x="66" y="48"  text-anchor="end">top-tier</text>
+          <text x="66" y="72"  text-anchor="end">dist fiber</text>
+          <text x="66" y="96"  text-anchor="end">pop chg</text>
+          <text x="66" y="120" text-anchor="end">housing</text>
+        </g>
+        <text x="120" y="147" text-anchor="middle" font-size="12" fill="#607d8b" font-family="Segoe UI">mean(|SHAP|) → weights</text>
+      </svg>
+    </div>
+    <div class="cap">Obtain SHAP weights to examine each feature's relevance in predicting groups accurately.</div>
+  </div>
+
+</div>
+</body></html>

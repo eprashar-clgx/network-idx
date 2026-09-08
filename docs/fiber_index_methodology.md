@@ -17,6 +17,14 @@ outputs to track and why each value is what it is.
 > weights. The single source of truth is the constants file (`SCORING_BUCKET_WEIGHTS`),
 > materialized per `run_id` in the `feature_weights` table.
 
+> **Business naming note.** The **demographic** bucket/sub-index was later renamed to
+> **Population & Housing** in the business-facing (customer-facing) fields for compliance
+> reasons — e.g. `demographic_index` is presented as the *Population & Housing* sub-index and
+> `demographic_weight` as its bucket weight. This is a display/label change only: the delivery
+> column names, the internal `demo` bucket key, and the governance **variable list**
+> (`docs/mrc/model_variables.csv`, family `Demographics`) are unchanged. Read "demographic"
+> throughout this document as "Population & Housing".
+
 ---
 
 ## 1. How the index is built
