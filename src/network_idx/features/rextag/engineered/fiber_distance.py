@@ -227,6 +227,34 @@ def render_assemble_call_sql() -> str:
     return f"CALL `{assemble_proc_ref()}`();"
 
 
+def render_completeness_assert_sql(states=None) -> str:
+    """
+    Return an ASSERT that fails if the final table is missing any expected state.
+
+    The worker stamps ``processed_at`` on every row it writes, and the assemble step
+    left-joins the full parcel master onto the staging table — so a state the worker
+    never processed appears with ``processed_at IS NULL`` and a spurious null fiber
+    distance, making a partial run masquerade as a complete table. This assertion runs
+    after assemble and fails the whole run unless every expected state (the ``states``
+    processed this run, defaulting to the fifty states plus DC) has at least one
+    worker-processed row, so a partial run can never silently pass downstream.
+    Territories carry no rextag fiber and are excluded from the expected set.
+    """
+    states = list(states) if states is not None else DEFAULT_STATES
+    in_list = ", ".join(f"'{s}'" for s in states)
+    return (
+        "ASSERT (\n"
+        "  (SELECT COUNT(DISTINCT state_fips)\n"
+        f"   FROM `{distance_table_ref()}`\n"
+        f"   WHERE processed_at IS NOT NULL AND state_fips IN ({in_list}))\n"
+        f"  = {len(states)}\n"
+        ") AS 'fiber_distance completeness check failed: not every expected state has "
+        "worker-processed rows (some state_fips have processed_at IS NULL) — a partial "
+        "run was detected. Re-run the driver over the missing states, then re-run "
+        "assemble, before using this table downstream.';"
+    )
+
+
 def get_bq_client():
     """Create an authenticated BigQuery client, authenticating first when local."""
     from google.cloud import bigquery
@@ -275,6 +303,7 @@ def build(
     )
     driver_call = render_driver_call_sql(states=states)
     assemble_call = render_assemble_call_sql()
+    completeness_assert = render_completeness_assert_sql(states=states)
 
     logger.info(f"Worker proc:    {worker_proc_ref()}")
     logger.info(f"Driver proc:    {driver_proc_ref()}")
@@ -292,6 +321,7 @@ def build(
         print(assemble_sql)
         print(driver_call)
         print(assemble_call)
+        print(completeness_assert)
         return
 
     if client is None:
@@ -314,6 +344,8 @@ def build(
     client.query(driver_call).result()
     logger.info("Running assemble...")
     client.query(assemble_call).result()
+    logger.info("Verifying state completeness...")
+    client.query(completeness_assert).result()
     logger.info(f"Done. Table {distance_table_ref()} created/replaced.")
 
 

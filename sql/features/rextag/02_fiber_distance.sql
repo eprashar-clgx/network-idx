@@ -1,8 +1,8 @@
 -- =============================================================================
--- Sharded parcel distance-to-nearest-fiber (3 stored procedures).
+-- Parcel-to-fiber distance (sharded spatial worker + driver + assemble).
 -- Module        : network_idx.features.rextag.engineered.fiber_distance
 -- Generated from : src/network_idx/features/rextag/engineered/fiber_distance.py  (python -m network_idx.features.rextag.engineered.fiber_distance --dry-run)
--- Run in         : VM / DEV-only (reads dev tables loc_growth_cnts_parcel + int_rextag_fiberopticcables_optimized; no direct PROD read)
+-- Run in         : VM (dev-only, BQ-validated)
 --
 -- PROJECT SUBSTITUTION (only these two identifiers change per environment):
 --   PROD_PROJECT = clgx-idap-bigquery-prd-a990   (raw source reads)
@@ -206,3 +206,9 @@ END;
 
 CALL `clgx-gis-app-dev-06e3.teu_features.rextag_calculate_parcel_dist_to_fiber`(['01', '02', '04', '05', '06', '08', '09', '10', '11', '12', '13', '15', '16', '17', '18', '19', '20', '21', '22', '23', '24', '25', '26', '27', '28', '29', '30', '31', '32', '33', '34', '35', '36', '37', '38', '39', '40', '41', '42', '44', '45', '46', '47', '48', '49', '50', '51', '53', '54', '55', '56'], 24140, 4828);
 CALL `clgx-gis-app-dev-06e3.teu_features.rextag_distance_assemble_parcel`();
+ASSERT (
+  (SELECT COUNT(DISTINCT state_fips)
+   FROM `clgx-gis-app-dev-06e3.teu_features.rextag_distance_parcel`
+   WHERE processed_at IS NOT NULL AND state_fips IN ('01', '02', '04', '05', '06', '08', '09', '10', '11', '12', '13', '15', '16', '17', '18', '19', '20', '21', '22', '23', '24', '25', '26', '27', '28', '29', '30', '31', '32', '33', '34', '35', '36', '37', '38', '39', '40', '41', '42', '44', '45', '46', '47', '48', '49', '50', '51', '53', '54', '55', '56'))
+  = 51
+) AS 'fiber_distance completeness check failed: not every expected state has worker-processed rows (some state_fips have processed_at IS NULL) — a partial run was detected. Re-run the driver over the missing states, then re-run assemble, before using this table downstream.';

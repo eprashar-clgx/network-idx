@@ -137,7 +137,7 @@ def test_assemble_call_targets_the_procedure():
 def test_build_deploys_three_then_calls_driver_and_assemble():
     client = FakeClient()
     fiber_distance.build(client=client)
-    assert len(client.queries) == 6
+    assert len(client.queries) == 7
     assert "CREATE TABLE IF NOT EXISTS" in client.queries[0]
     assert "CREATE OR REPLACE PROCEDURE" in client.queries[1]
     assert "CREATE OR REPLACE PROCEDURE" in client.queries[2]
@@ -145,6 +145,24 @@ def test_build_deploys_three_then_calls_driver_and_assemble():
     assert client.queries[4].startswith("CALL")
     assert "rextag_calculate_parcel_dist_to_fiber" in client.queries[4]
     assert client.queries[5].startswith("CALL")
+    # final query is the state-completeness guard
+    assert client.queries[6].startswith("ASSERT")
+    assert "processed_at IS NOT NULL" in client.queries[6]
+
+
+def test_completeness_assert_checks_every_expected_state():
+    sql = fiber_distance.render_completeness_assert_sql()
+    n = len(fiber_distance.DEFAULT_STATES)
+    assert sql.startswith("ASSERT")
+    assert f"= {n}" in sql
+    assert "COUNT(DISTINCT state_fips)" in sql
+    assert "processed_at IS NOT NULL" in sql
+    assert fiber_distance.distance_table_ref() in sql
+    # a subset run asserts only the subset it processed
+    sub = fiber_distance.render_completeness_assert_sql(states=["06", "48"])
+    assert "= 2" in sub
+    assert "'06', '48'" in sub
+    assert "{" not in sql and "}" not in sql
 
 
 def test_build_deploy_only_does_not_call():

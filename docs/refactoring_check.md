@@ -63,12 +63,12 @@ Run each `sql/` script in the BigQuery console in this order, then report back s
 | 7 | `features.location.engineered.growth_concentrations` | VM | RUN ✅ | `teu_features.loc_growth_parcel_concentrations_h3r7` | ✅ run (7,340 rows) |
 | 8 | `features.location.engineered.hotspot_distance` | VM | RUN ✅ | `teu_features.loc_growth_distance_parcel` | ✅ run (154.6M rows, 3 cols) |
 | 9 | `features.rextag.transform.fiber_optimize` | CONSOLE | RUN ✅ | `teu_telecom.int_rextag_fiberopticcables_optimized` | ✅ run (2.71M rows) |
-| 10 | `features.rextag.engineered.fiber_distance` | VM | RUN ✅ | `teu_features.rextag_distance_parcel` (miles) | ✅ run (154.6M rows; `nearest_fiber_id` STRING, dist in miles; one-time F6 DROP of INT64 scratch) |
+| 10 | `features.rextag.engineered.fiber_distance` | VM | RUN ✅ | `teu_features.rextag_distance_parcel` (miles) | 🔴 INCOMPLETE — only 16/51 states processed (F7); re-run 35 missing states + assemble. Completeness ASSERT now added |
 | 11 | `features.demographic.engineered.population_change` | CONSOLE | 403 prod (expected) | `teu_features.demo_pop_ct` | ⏭️ skipped — no read perm on neighborhood_scout; existing `demo_pop_ct` reused |
 | 12 | `grain_transfer.location_growth_ct` | CONSOLE | 403 prod (expected) | `teu_features.loc_parcels_growth_ct` | ✅ run (85,064 tracts; miles fix live) |
-| 13 | `grain_transfer.rextag_distance_ct` | CONSOLE | 403 prod (expected) | `teu_features.rextag_distance_ct` | ✅ run (85,064 tracts; miles fix live; ~91% fiber-null, see F7) |
+| 13 | `grain_transfer.rextag_distance_ct` | CONSOLE | 403 prod (expected) | `teu_features.rextag_distance_ct` | 🔴 rebuild after F7 step-10 rerun (currently reflects 16-state data) |
 | 14 | `grain_transfer.fcc_features_ct` | CONSOLE | 403 prod (expected) | `teu_features.telecom_features_ct` | ✅ run (85,395 tracts; FCC features re-derived at tract, ADR-0007) |
-| 15 | `grain_transfer.features_ct` | VM | ✅ renders | `teu_features.features_ct` | ✅ run (85,395 tracts; 13 model features present) |
+| 15 | `grain_transfer.features_ct` | VM | ✅ renders | `teu_features.features_ct` | 🔴 rebuild after F7 (fiber-distance column currently ~91% spurious-null) |
 | 16 | `features.parcel_features` | VM | ✅ bq-valid (14.93 GB) | `teu_features.parcel_features` | 🟡 re-run pending (miles fix applied) |
 | 17 | `scoring.build_scaling_params` | VM | ✅ renders | `teu_analytics.scaling_params` | ✅ validated |
 | 18 | `scoring.build_weights` | VM | ✅ renders | `teu_analytics.feature_weights` | ✅ validated |
@@ -138,22 +138,33 @@ Monitoring and validation modules are pure Python (read + return); not SQL steps
   regenerated. The generated file is now fully re-runnable top-to-bottom (drop of
   the stale INT64 table is still required once, to clear the July schema).
 
-- **F7 — Fiber-distance feature is ~90% null before fill (found 2026-09-08, needs
-  user decision).** At parcel grain, `rextag_distance_parcel.dist_to_nearest_fiber_miles`
-  is NULL for **138.97M/154.56M (89.9%)** of parcels and `radius_fiber_count = 0`
-  for **92.3%** — i.e. no rextag fiber line within the 24,140 m (~15 mi) search /
-  4,828 m (~3 mi) radius thresholds (`FIBER_MAX_SEARCH_DIST_M`, `FIBER_RADIUS_COUNT_M`).
-  This propagates to the tract rollup: `rextag_distance_ct` and `features_ct` carry
-  a NULL median fiber distance for ~91% of tracts (77,681 / 85,064). **Not a
-  regression** — inherent to step 10's threshold-gated `MIN(...)`, unchanged by the
-  miles conversion or the CT rollup. It IS handled downstream: `dist_to_nearest_fiber_miles`
-  is an inverted feature with a **"p99" null fill**, so no-fiber rows fill to the
-  99th-percentile (far) distance — semantically "no fiber nearby = far." **Open
-  question for the user:** because p99 is derived from only the ~10% real distances
-  (all ≤15 mi), filling ~90% of rows at that cap makes the feature ~90% constant
-  after fill, with correspondingly low discriminative power. Decide whether that is
-  acceptable, whether the rextag source (2.71M long-haul fiber lines) undercounts
-  last-mile fiber, or whether the search threshold should change.
+- **F7 — Step 10 (`rextag_distance_parcel`) ran on only 16 of 51 states
+  (root-caused 2026-09-08).** Initially surfaced as "fiber distance NULL for ~90%
+  of parcels." **Not sparsity and not the CT rollup or the miles change** — the
+  step-10 run was incomplete. Evidence:
+  - Per-state null rate is lumpy, not uniform: 16 states have real distances, 35
+    (incl. CA, TX, FL, NY, PA, IL, OH, MI, NC, GA — the bulk of US parcels) are
+    100% null.
+  - The 35 null states have `processed_at IS NULL`. The worker stamps
+    `CURRENT_TIMESTAMP()` on every row it writes, so those parcels never went
+    through the worker; the assemble step's `LEFT JOIN` of the full 154M-parcel
+    master onto staging fills them with null distance + null timestamp, so a
+    **partial run looks like a complete table** (the assemble comment even says so).
+  - Proof it's data-present: 200 Michigan parcels sit a **median 178 m** (min 21 m)
+    from Michigan fiber that IS in `int_rextag_fiberopticcables_optimized`.
+  - **Step 9 verified good:** 2.71M lines, 0 null/collection geoms; every mainland
+    state + DC has tens of thousands of fiber lines in its parcel footprint. Only
+    offshore areas (HI, PR, Guam, N. Mariana, VI) carry no rextag fiber — HI is
+    worker-processed (null distance, non-null ts); territories are excluded from
+    `DEFAULT_STATES`.
+  → **Fix:** re-run step 10's driver over the 35 missing states, then re-run
+    assemble, then rebuild steps 13 (`rextag_distance_ct`) and 15 (`features_ct`).
+    The driver is idempotent (per-state `DELETE` first).
+  → **Guardrail added (this session):** `fiber_distance` now emits a final `ASSERT`
+    (in `build()` and in the generated `sql/features/rextag/02_fiber_distance.sql`)
+    that fails the run unless every expected state has ≥1 worker-processed row
+    (`processed_at IS NOT NULL`), so a partial run can never silently pass again.
+    New `render_completeness_assert_sql()`; test added; SQL regenerated.
 
 ## 3. Deliverables in flight
 
