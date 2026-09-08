@@ -63,13 +63,13 @@ Run each `sql/` script in the BigQuery console in this order, then report back s
 | 7 | `features.location.engineered.growth_concentrations` | VM | RUN ✅ | `teu_features.loc_growth_parcel_concentrations_h3r7` | ✅ run (7,340 rows) |
 | 8 | `features.location.engineered.hotspot_distance` | VM | RUN ✅ | `teu_features.loc_growth_distance_parcel` | ✅ run (154.6M rows, 3 cols) |
 | 9 | `features.rextag.transform.fiber_optimize` | CONSOLE | RUN ✅ | `teu_telecom.int_rextag_fiberopticcables_optimized` | ✅ run (2.71M rows) |
-| 10 | `features.rextag.engineered.fiber_distance` | VM | needs scratch DROP | `teu_features.rextag_distance_parcel` (miles) | 🟡 drop stale INT64 scratch once, then run regenerated SQL (F6 type-clash + ordering fix) |
-| 11 | `features.demographic.engineered.population_change` | CONSOLE | 403 prod (expected) | `teu_features.demo_pop_ct` | 🟡 console-run pending |
-| 12 | `grain_transfer.location_growth_ct` | CONSOLE | 403 prod (expected) | `teu_features.loc_parcels_growth_ct` | 🟡 console-run pending |
-| 13 | `grain_transfer.rextag_distance_ct` | CONSOLE | 403 prod (expected) | `teu_features.rextag_distance_ct` | ✅ miles (F3 resolved) |
-| 14 | `grain_transfer.fcc_features_ct` | CONSOLE | 403 prod (expected) | `teu_features.telecom_features_ct` | 🟡 console-run pending (PROD+DEV; re-derives FCC features at tract via shared fragment, ADR-0007) |
-| 15 | `grain_transfer.features_ct` | VM | ✅ renders | `teu_features.features_ct` | 🟡 dev-run pending (tract training frame; emits the 13 model-named features) |
-| 16 | `features.parcel_features` | VM | ✅ bq-valid (14.93 GB) | `teu_features.parcel_features` | ✅ validated (miles fix applied; re-run) |
+| 10 | `features.rextag.engineered.fiber_distance` | VM | RUN ✅ | `teu_features.rextag_distance_parcel` (miles) | ✅ run (154.6M rows; `nearest_fiber_id` STRING, dist in miles; one-time F6 DROP of INT64 scratch) |
+| 11 | `features.demographic.engineered.population_change` | CONSOLE | 403 prod (expected) | `teu_features.demo_pop_ct` | ⏭️ skipped — no read perm on neighborhood_scout; existing `demo_pop_ct` reused |
+| 12 | `grain_transfer.location_growth_ct` | CONSOLE | 403 prod (expected) | `teu_features.loc_parcels_growth_ct` | ✅ run (85,064 tracts; miles fix live) |
+| 13 | `grain_transfer.rextag_distance_ct` | CONSOLE | 403 prod (expected) | `teu_features.rextag_distance_ct` | ✅ run (85,064 tracts; miles fix live; ~91% fiber-null, see F7) |
+| 14 | `grain_transfer.fcc_features_ct` | CONSOLE | 403 prod (expected) | `teu_features.telecom_features_ct` | ✅ run (85,395 tracts; FCC features re-derived at tract, ADR-0007) |
+| 15 | `grain_transfer.features_ct` | VM | ✅ renders | `teu_features.features_ct` | ✅ run (85,395 tracts; 13 model features present) |
+| 16 | `features.parcel_features` | VM | ✅ bq-valid (14.93 GB) | `teu_features.parcel_features` | 🟡 re-run pending (miles fix applied) |
 | 17 | `scoring.build_scaling_params` | VM | ✅ renders | `teu_analytics.scaling_params` | ✅ validated |
 | 18 | `scoring.build_weights` | VM | ✅ renders | `teu_analytics.feature_weights` | ✅ validated |
 | 19 | `scoring.parcel_score` | VM | ✅ renders (weights baked) | `teu_outputs.parcel_scores` | ✅ validated |
@@ -138,13 +138,30 @@ Monitoring and validation modules are pure Python (read + return); not SQL steps
   regenerated. The generated file is now fully re-runnable top-to-bottom (drop of
   the stale INT64 table is still required once, to clear the July schema).
 
+- **F7 — Fiber-distance feature is ~90% null before fill (found 2026-09-08, needs
+  user decision).** At parcel grain, `rextag_distance_parcel.dist_to_nearest_fiber_miles`
+  is NULL for **138.97M/154.56M (89.9%)** of parcels and `radius_fiber_count = 0`
+  for **92.3%** — i.e. no rextag fiber line within the 24,140 m (~15 mi) search /
+  4,828 m (~3 mi) radius thresholds (`FIBER_MAX_SEARCH_DIST_M`, `FIBER_RADIUS_COUNT_M`).
+  This propagates to the tract rollup: `rextag_distance_ct` and `features_ct` carry
+  a NULL median fiber distance for ~91% of tracts (77,681 / 85,064). **Not a
+  regression** — inherent to step 10's threshold-gated `MIN(...)`, unchanged by the
+  miles conversion or the CT rollup. It IS handled downstream: `dist_to_nearest_fiber_miles`
+  is an inverted feature with a **"p99" null fill**, so no-fiber rows fill to the
+  99th-percentile (far) distance — semantically "no fiber nearby = far." **Open
+  question for the user:** because p99 is derived from only the ~10% real distances
+  (all ≤15 mi), filling ~90% of rows at that cap makes the feature ~90% constant
+  after fill, with correspondingly low discriminative power. Decide whether that is
+  acceptable, whether the rextag source (2.71M long-haul fiber lines) undercounts
+  last-mile fiber, or whether the search threshold should change.
+
 ## 3. Deliverables in flight
 
 - **DE raw-SQL folder (`sql/`) — 🟡 in progress.** One sub-folder per module with
   concrete, runnable SQL (only project ids parameterized) + `sql/README.md`
   runbook. 18 SQL files generated from module `--dry-run`. Doubles as the console
   SQL pack for the prod-reading steps.
-- **CT training-frame path — ✅ built (this session).** The model is fit at tract
+- **CT training-frame path — ✅ built + run (this session).** The model is fit at tract
   grain but scores parcels, so a tract training frame is now assembled alongside
   the parcel scoring input:
   - `grain_transfer.fcc_features_ct` (step 14, PROD+DEV) re-derives the four
@@ -195,3 +212,8 @@ what ran, the table produced, row count, and whether the schema matched expectat
 | 7 | `features/location/02_growth_concentrations.sql` | 2026-09-01 13:00Z | `teu_features.loc_growth_parcel_concentrations_h3r7` | 7,340 | ✅ | H3-r7 hotspot cells: growth/permit/landuse/builder counts + total_flags + geom. |
 | 8 | `features/location/03_hotspot_distance.sql` | 2026-09-01 13:18Z | `teu_features.loc_growth_distance_parcel` | 154,563,179 | ✅ | 3 cols: parcel_shape_id, dist_to_nearest_hotspot_miles, is_inside_hotspot. Rows match parcel master. Reads step 7. |
 | 9 | `features/rextag/01_fiber_optimize.sql` | 2026-09-01 13:03Z | `teu_telecom.int_rextag_fiberopticcables_optimized` | 2,712,222 | ✅ | Stored proc CREATE+CALL. Cleaned/optimised fiber geometry: original_fiber_id, num_points, geometry. Clustered. No F6. |
+| 10 | `features/rextag/02_fiber_distance.sql` | 2026-09-08 11:55Z | `teu_features.rextag_distance_parcel` | 154,563,179 | ✅ | 6 cols. `nearest_fiber_id` STRING (type fix confirmed), `dist_to_nearest_fiber_miles` FLOAT, `radius_fiber_count`. Rows = parcel master. Required one-time DROP of stale INT64 scratch (F6); staging-table ordering fix worked. |
+| 12 | `grain_transfer/01_location_growth_ct.sql` | 2026-09-08 11:59Z | `teu_features.loc_parcels_growth_ct` | 85,064 | ✅ | PROD+DEV. 18 cols, ~85K tracts. F3 miles fix live: `mean_dist_nearest_hotspot_miles` (FLOAT) + `median_dist_nearest_hotspot`; no stale `_m`. Reads steps 6+8 + PROD tract boundary. (Step 11 skipped — no read perm on neighborhood_scout; existing `demo_pop_ct` reused.) |
+| 13 | `grain_transfer/02_rextag_distance_ct.sql` | 2026-09-08 12:02Z | `teu_features.rextag_distance_ct` | 85,064 | ✅ | PROD+DEV. 6 cols. F3 miles fix live: `mean/median_dist_nearest_fiber_miles` (FLOAT); no `_m`. 91% of tracts NULL median fiber dist — inherited from step-10 threshold gating (see F7), not a rollup bug. |
+| 14 | `grain_transfer/03_fcc_features_ct.sql` | 2026-09-08 12:02Z | `teu_features.telecom_features_ct` | 85,395 | ✅ | PROD+DEV. 12 cols. FCC features re-derived at tract via shared fragment (ADR-0007). Spine = 85,395 populated tracts; cable/housing 0 nulls. |
+| 15 | `grain_transfer/04_features_ct.sql` | 2026-09-08 12:02Z | `teu_features.features_ct` | 85,395 | ✅ | DEV. Tract **training frame**. 15 cols = 2 keys + exactly the 13 model-named features `train.py` renames. Telecom spine; left-joins leave 362 growth-null, 1,301 pop-null, 78,012 fiber-null (all expected; fiber p99-filled downstream). |
