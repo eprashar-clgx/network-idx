@@ -4,9 +4,10 @@ Offline tests for the rextag fiber-optimize transform.
 These tests exercise the procedure rendering and the deploy-and-run dispatch without
 any BigQuery access. A fake client records the SQL it is asked to run, so the tests
 assert that the rendered procedure references the resolved names, injects the boundary
-UDF dataset and vertex threshold, defines a stored procedure, and leaves no unresolved
-placeholders; that the call statement targets the same procedure; and that build
-deploys then runs, deploy_only deploys without running, and a dry run does neither.
+UDF dataset and vertex threshold, carries the stable loc_id and assigns a within-run
+spatial_fiber_id, defines a stored procedure, and leaves no unresolved placeholders;
+that the call statement targets the same procedure; and that build deploys then runs,
+deploy_only deploys without running, and a dry run does neither.
 """
 from network_idx.constants import FIBER_SUBDIVIDE_MAX_VERTICES
 from network_idx.features.rextag.transform import fiber_optimize
@@ -46,6 +47,12 @@ def test_render_defines_procedure_and_substitutes_names():
 def test_render_injects_subdivide_threshold():
     sql = _render()
     assert f"num_points > {FIBER_SUBDIVIDE_MAX_VERTICES}" in sql
+
+
+def test_render_carries_loc_id_and_assigns_spatial_fiber_id():
+    sql = _render()
+    assert "MIN(loc_id) AS loc_id" in sql
+    assert "ROW_NUMBER() OVER() AS spatial_fiber_id" in sql
 
 
 def test_render_has_no_unresolved_placeholders():

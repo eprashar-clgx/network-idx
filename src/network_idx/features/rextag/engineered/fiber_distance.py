@@ -16,6 +16,17 @@ state and shard into a staging table, a driver that loops over the requested sta
 calls the worker once per shard, and an assemble step that joins the staging results
 back onto the full parcel master and converts metres to miles.
 
+The worker pre-filters the nationwide optimised-fiber table to a buffer around the
+target state before its spatial join, so each shard only ever compares parcels against
+nearby fiber. Without this pre-filter, every shard scans all fiber nationwide and the
+join's CPU cost exceeds BigQuery's on-demand CPU-to-bytes ratio limit for denser states
+— the root cause of an earlier run that silently completed with only 16 of 51 states
+processed (the driver swallowed the resulting per-shard errors and the assemble step's
+LEFT JOIN filled the unprocessed states with nulls). The driver now also raises at the
+end if any shard failed, and `render_completeness_assert_sql` provides a second,
+independent guard by asserting every expected state has at least one processed row —
+so a partial run can no longer pass silently through either path.
+
 This module therefore has a deploy-and-run shape: it renders the three CREATE OR REPLACE
 PROCEDURE statements from configuration, deploys them, and — unless deploy_only — calls
 the driver over the requested states and then the assemble step. The states are a
@@ -46,6 +57,7 @@ from network_idx.constants import (
     METERS_PER_MILE,
     STATE_FIPS,
 )
+from network_idx.sources.registry import RAW_SOURCES_BQ
 from network_idx.utils import check_and_authenticate
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -60,6 +72,9 @@ CALC_TABLE_SQL_PATH = Path(__file__).parent / "fiber_distance_calc_table.sql"
 WORKER_PROCEDURE_NAME = "rextag_run_spatial_shard_worker"
 DRIVER_PROCEDURE_NAME = "rextag_calculate_parcel_dist_to_fiber"
 ASSEMBLE_PROCEDURE_NAME = "rextag_distance_assemble_parcel"
+
+# The logical name of the state-boundary source the worker pre-filters fiber against.
+SOURCE_STATE_BOUNDARY = "state_boundary"
 
 # Default states to process when a caller does not pass an explicit list: the fifty
 # states plus DC (FIPS 01-56), excluding the outlying territories which have no parcels.
@@ -111,6 +126,11 @@ def fiber_optimized_table_ref() -> str:
     return f"{GCS_PROJECT_ID}.{BQ_DATASET_TELECOM}.{BQ_TABLE_REXTAG_FIBER_OPTIMIZED}"
 
 
+def state_boundary_table_ref() -> str:
+    """Return the state-boundary source table the worker pre-filters fiber against."""
+    return RAW_SOURCES_BQ[SOURCE_STATE_BOUNDARY].table_ref
+
+
 def render_shard_case() -> str:
     """
     Render the shard-count CASE expression from the per-state shard configuration.
@@ -131,13 +151,15 @@ def render_worker_sql(
     calc_table: str,
     parcel_table: str,
     fiber_optimized_table: str,
+    state_boundary_table: str,
 ) -> str:
     """
     Render the worker CREATE OR REPLACE PROCEDURE statement.
 
     This is a pure function: it reads the worker template and substitutes the procedure
-    name, the staging table, the parcel table, and the optimised-fiber table, performing
-    no input or output of its own so it can be unit tested.
+    name, the staging table, the parcel table, the optimised-fiber table, and the
+    state-boundary table the worker pre-filters fiber against, performing no input or
+    output of its own so it can be unit tested.
     """
     template = WORKER_SQL_PATH.read_text()
     return template.format(
@@ -145,6 +167,7 @@ def render_worker_sql(
         calc_table=calc_table,
         parcel_table=parcel_table,
         fiber_optimized_table=fiber_optimized_table,
+        state_boundary_table=state_boundary_table,
     )
 
 
@@ -191,15 +214,17 @@ def render_assemble_sql(
     distance_table: str,
     parcel_table: str,
     calc_table: str,
+    fiber_optimized_table: str,
     meters_per_mile: float = METERS_PER_MILE,
 ) -> str:
     """
     Render the assemble CREATE OR REPLACE PROCEDURE statement.
 
     This is a pure function: it reads the assemble template and substitutes the procedure
-    name, the output distance table, the parcel master, the staging table, and the
-    metres-per-mile conversion, performing no input or output of its own so it can be
-    unit tested.
+    name, the output distance table, the parcel master, the staging table, the
+    optimised-fiber table (used to map the staging table's within-run fiber id back to
+    the stable, string loc_id), and the metres-per-mile conversion, performing no input
+    or output of its own so it can be unit tested.
     """
     template = ASSEMBLE_SQL_PATH.read_text()
     return template.format(
@@ -207,6 +232,7 @@ def render_assemble_sql(
         distance_table=distance_table,
         parcel_table=parcel_table,
         calc_table=calc_table,
+        fiber_optimized_table=fiber_optimized_table,
         meters_per_mile=meters_per_mile,
     )
 
@@ -288,6 +314,7 @@ def build(
         calc_table=calc_table_ref(),
         parcel_table=parcel_table_ref(),
         fiber_optimized_table=fiber_optimized_table_ref(),
+        state_boundary_table=state_boundary_table_ref(),
     )
     calc_table_sql = render_calc_table_sql(calc_table=calc_table_ref())
     driver_sql = render_driver_sql(
@@ -300,6 +327,7 @@ def build(
         distance_table=distance_table_ref(),
         parcel_table=parcel_table_ref(),
         calc_table=calc_table_ref(),
+        fiber_optimized_table=fiber_optimized_table_ref(),
     )
     driver_call = render_driver_call_sql(states=states)
     assemble_call = render_assemble_call_sql()
@@ -310,6 +338,7 @@ def build(
     logger.info(f"Assemble proc:  {assemble_proc_ref()}")
     logger.info(f"Parcel table:   {parcel_table_ref()}")
     logger.info(f"Fiber table:    {fiber_optimized_table_ref()}")
+    logger.info(f"State boundary: {state_boundary_table_ref()}")
     logger.info(f"Staging table:  {calc_table_ref()}")
     logger.info(f"Output table:   {distance_table_ref()}")
 

@@ -106,6 +106,13 @@ RAW_SOURCES_BQ = {
         config.BQ_PROD_DATASET_REXTAG,
         config.BQ_PROD_VIEW_REXTAG_FIBER,
     ),
+    # State boundary geometry — the fiber-distance worker pre-filters the nationwide
+    # optimised-fiber table against this per state before the spatial join.
+    "state_boundary": BQSource(
+        config.BQ_PROJECT_PROD,
+        config.BQ_PROD_DATASET_ADMIN_BOUNDARIES,
+        config.BQ_PROD_VIEW_STATE_BOUNDARY,
+    ),
     # Census block reference tables. Produced by the processing stage from Census
     # downloads and landed in BigQuery by the one-time census-blocks uploader; they live
     # in the active (dev) project for now and move to the production project once Data

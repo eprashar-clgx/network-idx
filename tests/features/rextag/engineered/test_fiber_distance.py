@@ -5,10 +5,11 @@ These tests exercise the rendering of the three stored procedures and the deploy
 dispatch without any BigQuery access. A fake client records the SQL it is asked to run,
 so the tests assert that each rendered procedure references the resolved names and leaves
 no unresolved placeholders, that the driver embeds the shard-count CASE from configuration
-and casts nothing away, that the worker casts the fiber id to a string and the assemble
-step converts metres to miles, that the driver call formats the states array, and that
-build deploys all three procedures then calls the driver and assemble, deploy_only skips
-the calls, and a dry run executes nothing.
+and raises when a shard fails, that the worker pre-filters fiber to a state-boundary
+buffer before its spatial join and stores an INT64 fiber id, that the assemble step maps
+that id back to a stable string loc_id and converts metres to miles, that the driver call
+formats the states array, and that build deploys all three procedures then calls the
+driver and assemble, deploy_only skips the calls, and a dry run executes nothing.
 """
 from network_idx.constants import (
     FIBER_STATE_SHARD_COUNTS,
@@ -38,6 +39,7 @@ def _worker():
         calc_table="proj.ds.calc",
         parcel_table="proj.ds.parcels",
         fiber_optimized_table="proj.tel.fiber_opt",
+        state_boundary_table="proj.ref.state_boundary",
     )
 
 
@@ -55,6 +57,7 @@ def _assemble():
         distance_table="proj.ds.distance",
         parcel_table="proj.ds.parcels",
         calc_table="proj.ds.calc",
+        fiber_optimized_table="proj.tel.fiber_opt",
     )
 
 
@@ -64,13 +67,21 @@ def test_worker_defines_procedure_and_substitutes_names():
     assert "INSERT INTO `proj.ds.calc`" in sql
     assert "`proj.ds.parcels`" in sql
     assert "`proj.tel.fiber_opt`" in sql
+    assert "`proj.ref.state_boundary`" in sql
 
 
-def test_worker_casts_fiber_id_to_string():
+def test_worker_prefilters_fiber_to_state_boundary_buffer():
     sql = _worker()
-    assert "CAST(" in sql
-    assert "AS STRING" in sql
-    assert ") AS nearest_fiber_id" in sql
+    assert "ST_BUFFER(" in sql
+    assert "ST_INTERSECTS(f.geometry, b.buffer_geom)" in sql
+    assert "WHERE state_fips = current_state" in sql
+
+
+def test_worker_stores_int_fiber_id_without_casting():
+    sql = _worker()
+    assert "AS nearest_fiber_id" in sql
+    assert "CAST(" not in sql
+    assert "spatial_fiber_id" in sql
 
 
 def test_worker_has_no_unresolved_placeholders():
@@ -90,12 +101,25 @@ def test_driver_defines_procedure_and_embeds_shard_case():
 def test_driver_creates_staging_table_if_not_exists():
     sql = _driver()
     assert "CREATE TABLE IF NOT EXISTS `proj.ds.calc`" in sql
+    assert "nearest_fiber_id INT64" in sql
 
 
-def test_calc_table_creates_staging_table_with_string_fiber_id():
+def test_driver_raises_after_processing_all_states_when_a_shard_fails():
+    sql = _driver()
+    assert "DECLARE failures ARRAY<STRING>" in sql
+    assert "EXCEPTION WHEN ERROR THEN" in sql
+    # the failure is recorded, not re-raised immediately, so every state/shard is
+    # still attempted
+    assert "SET failures = ARRAY_CONCAT(failures" in sql
+    # then the whole procedure raises once every state/shard has been attempted
+    assert "RAISE USING MESSAGE" in sql
+    assert "IF ARRAY_LENGTH(failures) > 0 THEN" in sql
+
+
+def test_calc_table_creates_staging_table_with_int_fiber_id():
     sql = fiber_distance.render_calc_table_sql(calc_table="proj.ds.calc")
     assert "CREATE TABLE IF NOT EXISTS `proj.ds.calc`" in sql
-    assert "nearest_fiber_id STRING" in sql
+    assert "nearest_fiber_id INT64" in sql
     assert "CLUSTER BY state_fips, parcel_shape_id" in sql
     assert "{" not in sql and "}" not in sql
 
@@ -110,6 +134,14 @@ def test_assemble_converts_metres_to_miles():
     assert f"/ {METERS_PER_MILE} AS dist_to_nearest_fiber_miles" in sql
     assert "CREATE OR REPLACE TABLE `proj.ds.distance`" in sql
     assert "LEFT JOIN `proj.ds.calc`" in sql
+
+
+def test_assemble_maps_spatial_fiber_id_back_to_stable_loc_id():
+    sql = _assemble()
+    assert "fiber_lookup" in sql
+    assert "`proj.tel.fiber_opt`" in sql
+    assert "fl.loc_id AS nearest_fiber_id" in sql
+    assert "ON c.nearest_fiber_id = fl.spatial_fiber_id" in sql
 
 
 def test_assemble_has_no_unresolved_placeholders():

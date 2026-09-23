@@ -76,6 +76,15 @@ BQ_PROJECT_CARTO = os.getenv("BQ_PROJECT_CARTO", "carto-os")
 BQ_PROD_DATASET_REXTAG = os.getenv("BQ_PROD_DATASET_REXTAG", "edr_ent_property_energy_infrastructure")
 BQ_PROD_VIEW_REXTAG_FIBER = "vw_rextag_telecommunications_fiber_optic_cables"
 
+# State boundary geometry, used by the fiber-distance worker to pre-filter the
+# nationwide optimised-fiber table down to lines near the state being processed. Without
+# this pre-filter, the spatial join scans all fiber for every shard and its CPU cost
+# exceeds BigQuery's on-demand CPU-to-bytes ratio limit for the denser states.
+BQ_PROD_DATASET_ADMIN_BOUNDARIES = os.getenv(
+    "BQ_PROD_DATASET_ADMIN_BOUNDARIES", "edr_ent_property_geospatial_admin_boundaries"
+)
+BQ_PROD_VIEW_STATE_BOUNDARY = "vw_geospatial_admin_boundaries_state"
+
 # ── Demographics / population ─────────────────────────────────────────────────
 BQ_TABLE_DEMO_POP_TRACT = "demo_pop_ct"
 BQ_SOURCE_NEIGHBORHOOD_SCOUT_CT = os.getenv(

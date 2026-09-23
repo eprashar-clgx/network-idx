@@ -3,12 +3,18 @@
 -- Deployed as a stored procedure so the data-engineering pipeline can chain it with
 -- CALL alongside the other rextag procedures. It reads the raw fiber-optic cable
 -- geometry view, separates multi-line geometries into single lines, de-duplicates
--- identical paths and assigns each a within-run id, subdivides very long lines so the
--- downstream proximity join stays efficient, and drops geometry collections. There is
--- no analytical choice here — it is a mechanical reshape — so it belongs in the
+-- identical paths (keeping the smallest loc_id per unique path so the id is
+-- deterministic across runs), assigns each unique path a within-run integer id used
+-- for the downstream spatial joins, subdivides very long lines so the downstream
+-- proximity join stays efficient, and drops geometry collections. There is no
+-- analytical choice here — it is a mechanical reshape — so it belongs in the
 -- transform layer. The procedure name, output table, input view, spatial-UDF dataset,
 -- and the subdivision vertex threshold are rendered from configuration so the same
 -- logic deploys to any environment's project.
+--
+-- loc_id (the rextag source id) is carried through so the fiber-distance feature's
+-- assemble step can map the integer spatial_fiber_id used for the spatial join back to
+-- a stable, string id for the final, customer-facing nearest_fiber_id column.
 
 CREATE OR REPLACE PROCEDURE `{proc_ref}`()
 BEGIN
@@ -34,23 +40,28 @@ BEGIN
     WHERE loc_id NOT IN (SELECT loc_id FROM multis)
   ),
 
-  -- dedup fiber into unique paths (excluding abandoned lines)
+  -- dedup fiber into unique paths (excluding abandoned lines), keeping the smallest
+  -- loc_id per path so the id is deterministic across runs
   raw_fiber_geoms AS (
-    SELECT ST_ASGEOJSON(geometry) AS geometry
+    SELECT
+      MIN(loc_id) AS loc_id,
+      ST_ASGEOJSON(geometry) AS geometry
     FROM mp_sp
     WHERE status != 'Abandoned'
-    GROUP BY 1
+    GROUP BY ST_ASGEOJSON(geometry)
   ),
   unique_fiber AS (
-    SELECT ST_GEOGFROMGEOJSON(geometry) AS geometry
+    SELECT
+      loc_id,
+      ST_GEOGFROMGEOJSON(geometry) AS geometry,
+      ST_NUMPOINTS(ST_GEOGFROMGEOJSON(geometry)) AS num_points
     FROM raw_fiber_geoms
   ),
 
-  -- assign a within-run numeric id and count vertices
+  -- assign a within-run numeric id used for the spatial join
   base AS (
     SELECT
-      ROW_NUMBER() OVER() AS original_fiber_id,
-      ST_NUMPOINTS(geometry) AS num_points,
+      ROW_NUMBER() OVER() AS spatial_fiber_id,
       *
     FROM unique_fiber
   ),

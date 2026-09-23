@@ -3,11 +3,14 @@
 -- Orchestrates the sharded worker across a list of target states: it ensures the
 -- staging table exists, then for each state deletes any prior rows (so re-runs are
 -- idempotent), decides how many shards that state needs, and calls the worker once per
--- shard inside an exception handler so a single failing shard does not abort the run.
--- It is deployed as a stored procedure so the data-engineering pipeline can chain it
--- with CALL. The distance and radius defaults and the per-state shard counts are
--- rendered from configuration; the states to process are a runtime parameter so the
--- caller can launch disjoint batches in parallel.
+-- shard. A failing shard is recorded rather than aborting the run, so every requested
+-- state and shard is still attempted; but if any shard failed, the whole procedure
+-- raises at the end (naming every failing state/shard) instead of completing as if
+-- nothing went wrong, so a partial run can never look like a clean success. It is
+-- deployed as a stored procedure so the data-engineering pipeline can chain it with
+-- CALL. The distance and radius defaults and the per-state shard counts are rendered
+-- from configuration; the states to process are a runtime parameter so the caller can
+-- launch disjoint batches in parallel.
 
 CREATE OR REPLACE PROCEDURE `{driver_proc_ref}`(
   target_states ARRAY<STRING>,
@@ -19,6 +22,7 @@ BEGIN
   DECLARE s INT64 DEFAULT 0;
   DECLARE current_state STRING;
   DECLARE state_shard_limit INT64;
+  DECLARE failures ARRAY<STRING> DEFAULT [];
 
   SET max_dist_threshold_m = COALESCE(max_dist_threshold_m, {max_dist_default});
   SET radius_threshold_m = COALESCE(radius_threshold_m, {radius_default});
@@ -28,7 +32,7 @@ BEGIN
     parcel_shape_id INT64,
     state_fips STRING,
     dist_to_nearest_fiber_m FLOAT64,
-    nearest_fiber_id STRING,
+    nearest_fiber_id INT64,
     radius_fiber_count INT64,
     processed_at TIMESTAMP
   ) CLUSTER BY state_fips, parcel_shape_id;
@@ -53,12 +57,22 @@ BEGIN
           radius_threshold_m
         );
       EXCEPTION WHEN ERROR THEN
-        -- surface the failing state/shard without aborting the whole run
-        SELECT FORMAT("Error in state %s, shard %d: %s", current_state, s, @@error.message);
+        -- record the failing state/shard and keep going, so one bad shard does not
+        -- stop every other state/shard from being attempted
+        SET failures = ARRAY_CONCAT(failures, [FORMAT("state %s shard %d: %s", current_state, s, @@error.message)]);
       END;
       SET s = s + 1;
     END WHILE;
 
     SET i = i + 1;
   END WHILE;
+
+  -- surface every failure as a hard error, so a partial run cannot complete silently
+  IF ARRAY_LENGTH(failures) > 0 THEN
+    RAISE USING MESSAGE = FORMAT(
+      "fiber_distance driver: %d shard(s) failed and were skipped: %s",
+      ARRAY_LENGTH(failures),
+      ARRAY_TO_STRING(failures, " | ")
+    );
+  END IF;
 END;

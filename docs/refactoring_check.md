@@ -63,7 +63,7 @@ Run each `sql/` script in the BigQuery console in this order, then report back s
 | 7 | `features.location.engineered.growth_concentrations` | VM | RUN ✅ | `teu_features.loc_growth_parcel_concentrations_h3r7` | ✅ run (7,340 rows) |
 | 8 | `features.location.engineered.hotspot_distance` | VM | RUN ✅ | `teu_features.loc_growth_distance_parcel` | ✅ run (154.6M rows, 3 cols) |
 | 9 | `features.rextag.transform.fiber_optimize` | CONSOLE | RUN ✅ | `teu_telecom.int_rextag_fiberopticcables_optimized` | ✅ run (2.71M rows) |
-| 10 | `features.rextag.engineered.fiber_distance` | VM | RUN ✅ | `teu_features.rextag_distance_parcel` (miles) | 🔴 INCOMPLETE — only 16/51 states processed (F7); re-run 35 missing states + assemble. Completeness ASSERT now added |
+| 10 | `features.rextag.engineered.fiber_distance` | CONSOLE (was VM; worker now reads a PROD state-boundary view) | RUN ✅ (redesigned) | `teu_features.rextag_distance_parcel` (miles) | 🔴 re-run pending — F7 true root cause found: on-demand CPU/bytes ratio limit, not just partial coverage. Worker now pre-filters fiber per state, shard tiers retuned, driver raises on any shard failure, `nearest_fiber_id` now the stable `loc_id`. Awaiting clean console run |
 | 11 | `features.demographic.engineered.population_change` | CONSOLE | 403 prod (expected) | `teu_features.demo_pop_ct` | ⏭️ skipped — no read perm on neighborhood_scout; existing `demo_pop_ct` reused |
 | 12 | `grain_transfer.location_growth_ct` | CONSOLE | 403 prod (expected) | `teu_features.loc_parcels_growth_ct` | ✅ run (85,064 tracts; miles fix live) |
 | 13 | `grain_transfer.rextag_distance_ct` | CONSOLE | 403 prod (expected) | `teu_features.rextag_distance_ct` | 🔴 rebuild after F7 step-10 rerun (currently reflects 16-state data) |
@@ -165,6 +165,54 @@ Monitoring and validation modules are pure Python (read + return); not SQL steps
     that fails the run unless every expected state has ≥1 worker-processed row
     (`processed_at IS NOT NULL`), so a partial run can never silently pass again.
     New `render_completeness_assert_sql()`; test added; SQL regenerated.
+  → **True root cause found on re-run (2026-09-23):** the ASSERT did its job — the
+    console re-run failed loudly instead of silently. The actual failure was
+    BigQuery's **on-demand CPU-to-bytes ratio limit**: the worker's `ST_DWITHIN`
+    searches a 15-mile band against the *entire* nationwide fiber table
+    (`int_rextag_fiberopticcables_optimized`, ~664 MB) on every shard, so CPU cost
+    scales with total fiber regardless of how few parcels a shard covers. Even
+    moderate states (AL, AZ, AR) failed at 1 shard; the driver's per-shard
+    `EXCEPTION` handler silently swallowed each failure — the second, deeper layer
+    of the same masking bug. Sharding alone (more shards per state) does not fix
+    this: each shard still scans the full fiber table, so bytes-billed stays flat
+    while only CPU drops — it would need 10s of shards per dense state, pure
+    per-state guesswork.
+  → **Redesign shipped (2026-09-23), ported from a colleague's rewrite:**
+    - **Worker pre-filters fiber per state** (`fiber_distance_worker.sql`): a new
+      `state_boundary` CTE reads a PROD state-boundary view (`state_boundary` in
+      the source registry), buffers it by the search distance, and a `state_fiber`
+      CTE keeps only fiber lines intersecting that buffer — so a shard's join only
+      ever touches nearby fiber, not the whole country's. This is the real fix for
+      the ratio-limit failure.
+    - **`FIBER_SUBDIVIDE_MAX_VERTICES` 256 → 16** and **`FIBER_STATE_SHARD_COUNTS`**
+      replaced with a data-driven, production-derived tier map (2–32 shards per
+      state sized from each state's actual parcel/fiber cross-product;
+      `constants/rextag.py`).
+    - **Stable `nearest_fiber_id`:** `fiber_optimize` now carries the source
+      `loc_id` through dedup (`MIN(loc_id)` per unique path) alongside a new
+      within-run `spatial_fiber_id` (renamed from `original_fiber_id`) used only for
+      the cheap spatial join; the staging table stores the INT64
+      `spatial_fiber_id`, and `fiber_distance_assemble.sql` maps it back to the
+      stable, string `loc_id` for the final table via a `fiber_lookup` CTE — so
+      `nearest_fiber_id` is now reproducible across optimise re-runs (previously a
+      within-run row id).
+    - **Driver hardens against silent partial runs a second way:** it still
+      attempts every state/shard (a failure no longer aborts the loop), but now
+      accumulates failures in a `failures` array and `RAISE`s once at the end
+      naming every failing state/shard — so a run with any failed shard can no
+      longer complete looking clean, independent of the completeness `ASSERT`.
+    - **Run location changed:** because the worker now reads a PROD view (state
+      boundary) in addition to PROD fiber, step 10 is CONSOLE-only (was VM
+      dev-only); `sql/README.md` and the module-status table below updated.
+    - Ported into `constants/rextag.py`, the three `fiber_distance_*.sql`
+      templates, `fiber_optimize.sql`, `fiber_distance.py` (new
+      `state_boundary_table_ref()`, updated `render_worker_sql` /
+      `render_assemble_sql` signatures), `config/bigquery.py` (new
+      `BQ_PROD_DATASET_ADMIN_BOUNDARIES` / `BQ_PROD_VIEW_STATE_BOUNDARY`),
+      `sources/registry.py` (new `state_boundary` source); tests updated (264
+      total pass). Both `sql/features/rextag/01_fiber_optimize.sql` and
+      `02_fiber_distance.sql` regenerated. **Awaiting a clean console re-run of
+      step 10** before rebuilding 13 → 15.
 
 ## 3. Deliverables in flight
 

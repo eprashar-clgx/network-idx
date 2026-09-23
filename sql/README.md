@@ -74,7 +74,7 @@ carry the same thirteen model features — train/score parity.)
 | 7 | `features/location/02_growth_concentrations.sql` | DEV | 6 | `teu_features.loc_growth_parcel_concentrations_h3r7` |
 | 8 | `features/location/03_hotspot_distance.sql` | DEV | 7 | `teu_features.loc_growth_distance_parcel` |
 | 9 | `features/rextag/01_fiber_optimize.sql` | PROD | — | `teu_telecom.int_rextag_fiberopticcables_optimized` |
-| 10 | `features/rextag/02_fiber_distance.sql` | DEV | 9, 6 | `teu_features.rextag_distance_parcel` |
+| 10 | `features/rextag/02_fiber_distance.sql` | PROD + DEV | 9, 6 | `teu_features.rextag_distance_parcel` |
 | 11 | `features/demographic/01_population_change.sql` | PROD | — | `teu_features.demo_pop_ct` |
 | 12 | `grain_transfer/01_location_growth_ct.sql` | PROD + DEV | 7, 8 | `teu_features.loc_parcels_growth_ct` |
 | 13 | `grain_transfer/02_rextag_distance_ct.sql` | PROD + DEV | 10 | `teu_features.rextag_distance_ct` |
