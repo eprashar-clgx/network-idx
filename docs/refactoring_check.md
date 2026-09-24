@@ -62,8 +62,8 @@ Run each `sql/` script in the BigQuery console in this order, then report back s
 | 6 | `features.location.engineered.growth_counts` | CONSOLE | RUN ✅ | `teu_features.loc_growth_cnts_parcel` | ✅ run (154.6M rows) |
 | 7 | `features.location.engineered.growth_concentrations` | VM | RUN ✅ | `teu_features.loc_growth_parcel_concentrations_h3r7` | ✅ run (7,340 rows) |
 | 8 | `features.location.engineered.hotspot_distance` | VM | RUN ✅ | `teu_features.loc_growth_distance_parcel` | ✅ run (154.6M rows, 3 cols) |
-| 9 | `features.rextag.transform.fiber_optimize` | CONSOLE | RUN ✅ | `teu_telecom.int_rextag_fiberopticcables_optimized` | ✅ run (2.71M rows) |
-| 10 | `features.rextag.engineered.fiber_distance` | CONSOLE (was VM; worker now reads a PROD state-boundary view) | RUN ✅ (redesigned) | `teu_features.rextag_distance_parcel` (miles) | 🔴 re-run pending — F7 true root cause found: on-demand CPU/bytes ratio limit, not just partial coverage. Worker now pre-filters fiber per state, shard tiers retuned, driver raises on any shard failure, `nearest_fiber_id` now the stable `loc_id`. Awaiting clean console run |
+| 9 | `features.rextag.transform.fiber_optimize` | CONSOLE | RUN ✅ | `teu_telecom.int_rextag_fiberopticcables_optimized` | ✅ re-run 2026-09-24 (4.33M rows post-redesign; subdivide=16, loc_id + spatial_fiber_id carried through, 2,678,444 distinct spatial_fiber_id, 0 null loc_id) |
+| 10 | `features.rextag.engineered.fiber_distance` | CONSOLE (worker reads a PROD state-boundary view) | RUN ✅ | `teu_features.rextag_distance_parcel` (miles) | ✅ **F7 RESOLVED** — re-run 2026-09-24: 154,563,179 rows; null `dist_to_nearest_fiber_miles` collapsed 89.9% → 3.8%; only HI/PR at 100% null (zero rextag fiber, expected); `nearest_fiber_id` confirmed stable non-numeric `loc_id` |
 | 11 | `features.demographic.engineered.population_change` | CONSOLE | 403 prod (expected) | `teu_features.demo_pop_ct` | ⏭️ skipped — no read perm on neighborhood_scout; existing `demo_pop_ct` reused |
 | 12 | `grain_transfer.location_growth_ct` | CONSOLE | 403 prod (expected) | `teu_features.loc_parcels_growth_ct` | ✅ run (85,064 tracts; miles fix live) |
 | 13 | `grain_transfer.rextag_distance_ct` | CONSOLE | 403 prod (expected) | `teu_features.rextag_distance_ct` | 🔴 rebuild after F7 step-10 rerun (currently reflects 16-state data) |
@@ -138,8 +138,8 @@ Monitoring and validation modules are pure Python (read + return); not SQL steps
   regenerated. The generated file is now fully re-runnable top-to-bottom (drop of
   the stale INT64 table is still required once, to clear the July schema).
 
-- **F7 — Step 10 (`rextag_distance_parcel`) ran on only 16 of 51 states
-  (root-caused 2026-09-08).** Initially surfaced as "fiber distance NULL for ~90%
+- **F7 — ✅ RESOLVED (2026-09-24).** Step 10 (`rextag_distance_parcel`) originally ran on
+  only 16 of 51 states (root-caused 2026-09-08). Initially surfaced as "fiber distance NULL for ~90%
   of parcels." **Not sparsity and not the CT rollup or the miles change** — the
   step-10 run was incomplete. Evidence:
   - Per-state null rate is lumpy, not uniform: 16 states have real distances, 35
@@ -211,8 +211,20 @@ Monitoring and validation modules are pure Python (read + return); not SQL steps
       `BQ_PROD_DATASET_ADMIN_BOUNDARIES` / `BQ_PROD_VIEW_STATE_BOUNDARY`),
       `sources/registry.py` (new `state_boundary` source); tests updated (264
       total pass). Both `sql/features/rextag/01_fiber_optimize.sql` and
-      `02_fiber_distance.sql` regenerated. **Awaiting a clean console re-run of
-      step 10** before rebuilding 13 → 15.
+      `02_fiber_distance.sql` regenerated.
+  → **Confirmed fixed on console re-run (2026-09-24):** re-ran steps 9 and 10.
+    `rextag_distance_parcel` now has **154,563,179 rows** (full parcel master) and
+    null `dist_to_nearest_fiber_miles` collapsed from **89.9% → 3.8%**. The only
+    states at 100% null are HI and PR (both confirmed to have zero rextag fiber —
+    not a coverage gap). `nearest_fiber_id` spot-checked as genuine non-numeric
+    `loc_id` strings, confirming the fiber_lookup mapping works. One harmless
+    legacy artifact: state 72 (PR, excluded from `DEFAULT_STATES`) carries stale
+    staging rows from a prior run that the driver doesn't touch since PR isn't in
+    its target list — cosmetically shows `processed_at IS NOT NULL` for PR, but
+    the distance is still correctly null (PR has no fiber either way), so no
+    action needed. **Steps 13 (`rextag_distance_ct`) and 15 (`features_ct`) need
+    to be rebuilt next** to propagate the corrected parcel-grain distances up to
+    tract.
 
 ## 3. Deliverables in flight
 
