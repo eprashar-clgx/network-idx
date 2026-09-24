@@ -162,8 +162,3 @@ BQ_TABLE_PARCEL_SCORES = "parcel_scores"       # scaled features + parcel index 
 
 # teu_outputs — customer delivery table
 BQ_TABLE_FIBER_IDX_PARCEL = "fiber_idx_v1_parcel"
-
-# teu_outputs — delivery quality-assurance tables
-BQ_TABLE_FIBER_IDX_PARCEL_QA_MINMAX = "fiber_idx_v1_parcel_qa_minmax"
-BQ_TABLE_FIBER_IDX_PARCEL_QA_FILLRATES = "fiber_idx_v1_parcel_qa_fillrates"
-BQ_TABLE_FIBER_IDX_PARCEL_QA_INDEX_BUCKETS = "fiber_idx_v1_parcel_qa_index_buckets"

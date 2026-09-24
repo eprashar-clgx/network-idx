@@ -14,12 +14,12 @@ changes:
 
 The numeric logic is the single source of truth in :mod:`scoring.weights` and
 :mod:`scoring.scaling`; this module is the thin orchestration seam over them so that
-the ``build_weights`` / ``build_scaling_params`` drivers, the notebooks, and any future
-caller all fit rules the same way. :func:`fit_scoring_rules` fits both in one call and
-returns them as a dict, matching the ADR's ``fit(training_frame, shap) → {weights,
-scaling_params}`` shape; the two ``fit_*`` helpers exist for callers that only need one
-side (the weight builder has SHAP but no BigQuery scan; the scaling builder has the scan
-but no SHAP).
+:mod:`modeling.run_training`, the ``build_scaling_params`` driver, the notebooks, and
+any future caller all fit rules the same way. :func:`fit_scoring_rules` fits both in
+one call and returns them as a dict, matching the ADR's ``fit(training_frame, shap) →
+{weights, scaling_params}`` shape; the two ``fit_*`` helpers exist for callers that
+only need one side (a caller may hold SHAP but not need the BigQuery scan, or need the
+scan without having just trained a model).
 """
 
 import logging

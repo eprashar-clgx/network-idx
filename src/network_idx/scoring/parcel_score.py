@@ -17,12 +17,16 @@ Output: {GCS_PROJECT_ID}.{BQ_DATASET_OUTPUTS}.{BQ_TABLE_PARCEL_SCORES}
 Usage:
     python -m network_idx.scoring.parcel_score
     python -m network_idx.scoring.parcel_score --dry-run
-    python -m network_idx.scoring.parcel_score --run-id lightgbm_k8_v1
+    python -m network_idx.scoring.parcel_score --run-id lightgbm_k8_v2
+    python -m network_idx.scoring.parcel_score --delivery
+
+Profiling the output (fill rates, score bands, per-state rollups) is not this
+module's job: that ground is covered by the ``monitoring`` module, which reports
+without persisting a parallel set of summary tables.
 """
 
 import argparse
 import logging
-import pandas as pd
 from google.cloud import bigquery
 
 from network_idx.config import (
@@ -38,9 +42,6 @@ from network_idx.config import (
     BQ_DATASET_OUTPUTS,
     BQ_TABLE_PARCEL_SCORES,
     BQ_TABLE_FIBER_IDX_PARCEL,
-    BQ_TABLE_FIBER_IDX_PARCEL_QA_MINMAX,
-    BQ_TABLE_FIBER_IDX_PARCEL_QA_FILLRATES,
-    BQ_TABLE_FIBER_IDX_PARCEL_QA_INDEX_BUCKETS
 )
 from network_idx.constants import (
     ALL_SCORING_FEATURES,
@@ -57,10 +58,9 @@ from network_idx.utils import check_and_authenticate
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
-# QA / rounding
+# Rounding
 ROUND_INDEX = 2   # 0-100 indices & sub-indices
 ROUND_VALUE = 4   # 0-1 scaled, weights, raw feature floats, raw sub-index sums
-NUMERIC_BQ_TYPES = {"INTEGER", "INT64", "FLOAT", "FLOAT64", "NUMERIC", "BIGNUMERIC"}
 INTEGER_RAW_FEATURES = {
     "census_housing_units",
     "landuse_change_qtr_mi_cnt",
@@ -68,8 +68,6 @@ INTEGER_RAW_FEATURES = {
     "bldr_dev_qtr_mi_cnt",
     "new_permit_qtr_mi_cnt"
     }  # don't ROUND (would coerce INT->FLOAT)
-INDEX_COLUMNS = ["demographic_index", "growth_index", "telecom_index", "fiber_potential_index"]
-INDEX_BINS = [0, 25, 50, 75, 100]  # fixed score bands; last band is inclusive of 100
 ROUND_WEIGHT = 2   # weights emitted as PERCENTAGES (0-100), display-only
 
 
@@ -311,7 +309,8 @@ def resolve_artifact_tables(client: bigquery.Client, run_id: str) -> tuple:
     if reg.empty:
         logger.warning(
             f"run_id={run_id} not found in run registry; using configured artifact "
-            f"tables. Register the run via build_weights to make scoring self-describing."
+            f"tables. Register the run via modeling.run_training to make scoring "
+            f"self-describing."
         )
         return default_scaling, default_weights
     row = reg.iloc[0]
@@ -333,7 +332,9 @@ def run(run_id: str, dry_run: bool = False) -> None:
     if params.empty:
         raise ValueError(f"No scaling_params rows for run_id={run_id}. Run build_scaling_params first.")
     if weights.empty:
-        raise ValueError(f"No feature_weights rows for run_id={run_id}. Run build_weights first.")
+        raise ValueError(
+            f"No feature_weights rows for run_id={run_id}. Run modeling.run_training first."
+        )
 
     sql = build_scoring_query(features_table, output_table, params, weights, run_id)
     if dry_run:
@@ -372,119 +373,6 @@ def run_delivery(run_id: str, dry_run: bool = False) -> None:
     client.query(sql).result()
     logger.info("Done.")
 
-def _write_qa(client: bigquery.Client, df: pd.DataFrame, table_id: str, run_id: str) -> None:
-    """Replace this run's QA rows (delete-then-append)."""
-    try:
-        client.query(
-            f"DELETE FROM `{table_id}` WHERE run_id = @run_id",
-            job_config=bigquery.QueryJobConfig(query_parameters=[
-                bigquery.ScalarQueryParameter("run_id", "STRING", run_id),
-            ]),
-        ).result()
-    except Exception as e:  # table may not exist yet
-        logger.info(f"Skipping delete (table may not exist yet): {e}")
-    client.load_table_from_dataframe(
-        df, table_id,
-        job_config=bigquery.LoadJobConfig(write_disposition=bigquery.WriteDisposition.WRITE_APPEND),
-    ).result()
-    logger.info(f"Wrote {len(df)} QA rows to {table_id}")
-
-
-def run_qa(run_id: str, dry_run: bool = False) -> None:
-    """Profile the delivery table: Table 1 = min/max (numeric cols), Table 2 = fill rates (all cols)."""
-    target = f"{GCS_PROJECT_ID}.{BQ_DATASET_OUTPUTS}.{BQ_TABLE_FIBER_IDX_PARCEL}"
-    minmax_out = f"{GCS_PROJECT_ID}.{BQ_DATASET_OUTPUTS}.{BQ_TABLE_FIBER_IDX_PARCEL_QA_MINMAX}"
-    fill_out = f"{GCS_PROJECT_ID}.{BQ_DATASET_OUTPUTS}.{BQ_TABLE_FIBER_IDX_PARCEL_QA_FILLRATES}"
-
-    client = get_bq_client()
-    schema = client.get_table(target).schema
-    numeric_cols = [f.name for f in schema if f.field_type in NUMERIC_BQ_TYPES]
-    all_cols = [f.name for f in schema]
-
-    # single-scan wide aggregations
-    mm_parts = []
-    for c in numeric_cols:
-        mm_parts.append(f"MIN(`{c}`) AS `{c}__min`")
-        mm_parts.append(f"MAX(`{c}`) AS `{c}__max`")
-    minmax_sql = "SELECT\n  " + ",\n  ".join(mm_parts) + f"\nFROM `{target}`"
-
-    fill_parts = ["COUNT(*) AS `__total`"] + [f"COUNT(`{c}`) AS `{c}__nn`" for c in all_cols]
-    fill_sql = "SELECT\n  " + ",\n  ".join(fill_parts) + f"\nFROM `{target}`"
-
-    logger.info(f"QA target: {target}")
-    if dry_run:
-        logger.info("Dry run — min/max SQL:")
-        print(minmax_sql)
-        logger.info("Dry run — fill-rate SQL:")
-        print(fill_sql)
-        return
-
-    now = pd.Timestamp.now(tz="UTC")
-
-    mm = list(client.query(minmax_sql).result())[0]
-    minmax_df = pd.DataFrame([{
-        "run_id": run_id,
-        "column_name": c,
-        "min_val": None if mm[f"{c}__min"] is None else float(mm[f"{c}__min"]),
-        "max_val": None if mm[f"{c}__max"] is None else float(mm[f"{c}__max"]),
-        "created_at": now,
-    } for c in numeric_cols])
-
-    fr = list(client.query(fill_sql).result())[0]
-    total = int(fr["__total"])
-    fill_df = pd.DataFrame([{
-        "run_id": run_id,
-        "column_name": c,
-        "non_null": int(fr[f"{c}__nn"]),
-        "total": total,
-        "fill_rate": round(fr[f"{c}__nn"] / total, 4) if total else None,
-        "created_at": now,
-    } for c in all_cols])
-
-    print(minmax_df.to_string(index=False))
-    print(fill_df.to_string(index=False))
-    _write_qa(client, minmax_df, minmax_out, run_id)
-    _write_qa(client, fill_df, fill_out, run_id)
-
-    buckets_out = f"{GCS_PROJECT_ID}.{BQ_DATASET_OUTPUTS}.{BQ_TABLE_FIBER_IDX_PARCEL_QA_INDEX_BUCKETS}"
-
-    band_parts = []
-    for c in INDEX_COLUMNS:
-        for i in range(len(INDEX_BINS) - 1):
-            lo, hi = INDEX_BINS[i], INDEX_BINS[i + 1]
-            op = "<=" if i == len(INDEX_BINS) - 2 else "<"  # last band inclusive of 100
-            band_parts.append(f"COUNTIF(`{c}` >= {lo} AND `{c}` {op} {hi}) AS `{c}__b{i}`")
-    bands_sql = ("SELECT\n  COUNT(*) AS `__total`,\n  "
-                 + ",\n  ".join(band_parts) + f"\nFROM `{target}`")
-
-    if dry_run:
-        logger.info("Dry run — index-band SQL:")
-        print(bands_sql)
-        # (return already happened above for min/max + fill; keep the earlier return)
-
-    br = list(client.query(bands_sql).result())[0]
-    total_b = int(br["__total"])
-    bucket_rows = []
-
-    for c in INDEX_COLUMNS:
-        for i in range(len(INDEX_BINS) - 1):
-            lo, hi = INDEX_BINS[i], INDEX_BINS[i + 1]
-            cnt = int(br[f"{c}__b{i}"])
-            bucket_rows.append({
-                "run_id": run_id,
-                "index_name": c,
-                "band": f"{lo}-{hi}",
-                "parcel_count": cnt,
-                "total": total_b,
-                "pct": round(cnt / total_b, 4) if total_b else None,
-                "created_at": now,
-            })
-    buckets_df = pd.DataFrame(bucket_rows)
-    print(buckets_df.to_string(index=False))
-    _write_qa(client, buckets_df, buckets_out, run_id)
-
-    logger.info("QA done.")
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Score all parcels / build the delivery table in BigQuery.")
@@ -493,12 +381,8 @@ if __name__ == "__main__":
                         help="Build the customer fiber_idx_v1_parcel table (requires parcel_scores to exist).")
     parser.add_argument("--dry-run", action="store_true", default=False,
                         help="Print the rendered SQL without executing it.")
-    parser.add_argument("--qa", action="store_true", default=False,
-                        help="Profile the delivery table: min/max + fill-rate QA tables.")
     args = parser.parse_args()
-    if args.qa:
-        run_qa(run_id=args.run_id, dry_run=args.dry_run)
-    elif args.delivery:
+    if args.delivery:
         run_delivery(run_id=args.run_id, dry_run=args.dry_run)
     else:
         run(run_id=args.run_id, dry_run=args.dry_run)
