@@ -81,7 +81,7 @@ TELECOM_FEATURE_NA_FILL = {
 # ── Run identity ──────────────────────────────────────────────────────────────
 SCORING_RUN_MODEL = "lightgbm"
 SCORING_RUN_K = 8
-SCORING_RUN_VERSION = "v1"
+SCORING_RUN_VERSION = "v2"
 SCORING_RUN_ID = f"{SCORING_RUN_MODEL}_k{SCORING_RUN_K}_{SCORING_RUN_VERSION}"
 
 # ── Scaling rules for the parcel index ────────────────────────────────────────

@@ -12,8 +12,12 @@ fact.
 
 The record is deliberately small and stable: the run identity (id, model, segment
 count ``k``, version), the fully-qualified tables its weights and scaling params were
-written to, the feature count, a free-text note, and a creation timestamp. Writing a
-run replaces any existing row for that ``run_id`` (delete-then-append) so a re-run
+written to, the feature count, a free-text note, and a creation timestamp. It also
+points at the run's git-committed JSON run artifact (``artifact_path``, see
+``modeling.artifacts``) and records the code version (git SHA) and the training-data
+table the run was fit on, so a run is fully traceable to the code and data that
+produced it without duplicating the artifact's contents into BigQuery. Writing a run
+replaces any existing row for that ``run_id`` (delete-then-append) so a re-run
 overwrites its own ledger entry without disturbing other runs, mirroring how the
 weight and scaling writers behave.
 """
@@ -42,7 +46,8 @@ logger = logging.getLogger(__name__)
 SCORING_RUNS_COLUMNS = [
     "run_id", "model", "k", "version",
     "feature_weights_table", "scaling_params_table",
-    "n_features", "notes", "created_at",
+    "n_features", "artifact_path", "code_version", "training_data_table",
+    "notes", "created_at",
 ]
 
 
@@ -65,11 +70,18 @@ def build_run_record(
     feature_weights_table: str = None,
     scaling_params_table: str = None,
     n_features: int = len(ALL_SCORING_FEATURES),
+    artifact_path: str = "",
+    code_version: str = "",
+    training_data_table: str = "",
     notes: str = "",
 ) -> pd.DataFrame:
     """Assemble the single-row registry frame for a run. Pure: builds no client and
     performs no I/O, so it is trivially testable. Artifact table refs default to the
-    configured ``teu_analytics`` weight and scaling tables when not supplied."""
+    configured ``teu_analytics`` weight and scaling tables when not supplied.
+    ``artifact_path`` should point at the run's JSON artifact (see
+    ``modeling.artifacts.artifact_path``); ``code_version`` at the git SHA the run was
+    produced under; ``training_data_table`` at the fully-qualified frame it was fit on
+    (typically ``features_ct``)."""
     default_weights, default_scaling = _default_artifact_tables()
     record = {
         "run_id": run_id,
@@ -79,6 +91,9 @@ def build_run_record(
         "feature_weights_table": feature_weights_table or default_weights,
         "scaling_params_table": scaling_params_table or default_scaling,
         "n_features": n_features,
+        "artifact_path": artifact_path,
+        "code_version": code_version,
+        "training_data_table": training_data_table,
         "notes": notes,
         "created_at": pd.Timestamp.now(tz="UTC"),
     }

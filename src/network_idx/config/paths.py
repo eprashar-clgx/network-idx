@@ -51,3 +51,6 @@ FEATURES_DIR_FCC_COVERAGE_COUNTY_RESIDUALS = Path("data/features/fcc/broadband_c
 # Broadband coverage block and tract cuts
 FEATURES_DIR_FCC_COVERAGE_BLOCK = Path("data/features/fcc/broadband_coverage/block")
 FEATURES_DIR_FCC_COVERAGE_TRACT = Path("data/features/fcc/broadband_coverage/tract")
+
+# ── Modeling run artifacts (git-committed, see modeling.artifacts) ────────────
+ARTIFACTS_DIR_RUNS = Path("artifacts/runs")

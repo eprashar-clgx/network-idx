@@ -68,7 +68,12 @@ class ModelArtifacts:
     ``feature_cols`` is the canonical column order the scaler, classifier, and SHAP
     array all share, so downstream code can line up SHAP columns with feature names
     without guessing. ``shap_values`` has shape (sample_rows, features, classes);
-    ``x_shap`` is the frame those attributions were computed on.
+    ``x_shap`` is the frame those attributions were computed on. ``x_scaled`` is the
+    full StandardScaled feature matrix ``kmeans`` was fit on, kept so cluster-quality
+    metrics (silhouette, Davies-Bouldin, Calinski-Harabasz) can be computed against the
+    same population the labels came from without redoing the fill/scale step.
+    ``classifier_accuracy``/``classifier_macro_f1`` are computed on the held-out test
+    split as a cheap fit-quality signal for the run artifact.
     """
 
     scaler: Any
@@ -76,10 +81,13 @@ class ModelArtifacts:
     classifier: Any
     feature_cols: list
     cluster_labels: np.ndarray
+    x_scaled: np.ndarray
     shap_values: np.ndarray
     x_shap: pd.DataFrame
     k: int
     random_state: int
+    classifier_accuracy: float
+    classifier_macro_f1: float
     params: dict = field(default_factory=lambda: dict(LGBM_PARAMS))
 
 
@@ -116,6 +124,7 @@ def train(
     a copy is filled internally.
     """
     from sklearn.cluster import KMeans
+    from sklearn.metrics import accuracy_score, f1_score
     from sklearn.model_selection import train_test_split
     from sklearn.preprocessing import StandardScaler
     import lightgbm as lgb
@@ -133,7 +142,7 @@ def train(
     kmeans = KMeans(n_clusters=k, random_state=random_state, n_init=10)
     cluster_labels = kmeans.fit_predict(x_scaled)
 
-    x_train, x_test, y_train, _ = train_test_split(
+    x_train, x_test, y_train, y_test = train_test_split(
         features, cluster_labels,
         test_size=test_size, random_state=random_state, stratify=cluster_labels,
     )
@@ -142,6 +151,12 @@ def train(
         random_state=random_state, verbose=-1, **lgbm_params
     )
     classifier.fit(x_train, y_train)
+
+    y_pred = classifier.predict(x_test)
+    classifier_accuracy = float(accuracy_score(y_test, y_pred))
+    classifier_macro_f1 = float(f1_score(y_test, y_pred, average="macro"))
+    logger.info("Classifier held-out accuracy=%.4f macro_f1=%.4f.",
+                classifier_accuracy, classifier_macro_f1)
 
     n_sample = min(shap_sample, len(x_test))
     x_shap = x_test.sample(n=n_sample, random_state=random_state)
@@ -156,9 +171,12 @@ def train(
         classifier=classifier,
         feature_cols=list(ALL_SCORING_FEATURES),
         cluster_labels=cluster_labels,
+        x_scaled=x_scaled,
         shap_values=shap_values,
         x_shap=x_shap,
         k=k,
         random_state=random_state,
+        classifier_accuracy=classifier_accuracy,
+        classifier_macro_f1=classifier_macro_f1,
         params=lgbm_params,
     )

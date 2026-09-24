@@ -106,10 +106,22 @@ thresholds, row-count sanity — that halts and alerts on failure. An input-side
 reported through monitoring. Distinct from validation.
 _Avoid_: data validation (collides with the construct-validity module), schema test.
 
+**Run artifact**:
+The single git-committed JSON file for a `run_id` (`artifacts/runs/<run_id>.json`)
+holding everything needed to audit and reproduce a run: code version, the training-data
+table it was fit on, hyperparameters, fit metrics (cluster inertia/silhouette, classifier
+macro-F1), the scaler and cluster-center profiles, feature weights, and scaling params.
+Nothing in it is a serialized model object (scaler/kmeans/classifier) beyond the small
+numeric arrays needed for interpretation — the classifier itself is disposable once its
+SHAP attributions are collapsed into feature weights, since a rerun with the same frozen
+seed reproduces it exactly.
+_Avoid_: pickle, joblib, model binary.
+
 **Run registry**:
-The `run_id`-keyed record of everything needed to reproduce and score a run — the model
-artifact, feature weights, scaling params, code version, training-data id, and fit
-metrics. Written by modeling, read by scoring; the backbone for temporal validation.
+The `run_id`-keyed BigQuery ledger row pointing at a run's artifact — model, k, version,
+`artifact_path` (into the git-committed run artifact), code version, training-data id,
+created-at. A thin index, not the payload; the backbone for temporal validation. Written
+by modeling, read by scoring.
 _Avoid_: model registry, artifact store.
 
 **Monitoring**:
