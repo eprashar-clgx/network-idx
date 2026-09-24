@@ -66,9 +66,9 @@ Run each `sql/` script in the BigQuery console in this order, then report back s
 | 10 | `features.rextag.engineered.fiber_distance` | CONSOLE (worker reads a PROD state-boundary view) | RUN ✅ | `teu_features.rextag_distance_parcel` (miles) | ✅ **F7 RESOLVED** — re-run 2026-09-24: 154,563,179 rows; null `dist_to_nearest_fiber_miles` collapsed 89.9% → 3.8%; only HI/PR at 100% null (zero rextag fiber, expected); `nearest_fiber_id` confirmed stable non-numeric `loc_id` |
 | 11 | `features.demographic.engineered.population_change` | CONSOLE | 403 prod (expected) | `teu_features.demo_pop_ct` | ⏭️ skipped — no read perm on neighborhood_scout; existing `demo_pop_ct` reused |
 | 12 | `grain_transfer.location_growth_ct` | CONSOLE | 403 prod (expected) | `teu_features.loc_parcels_growth_ct` | ✅ run (85,064 tracts; miles fix live) |
-| 13 | `grain_transfer.rextag_distance_ct` | CONSOLE | 403 prod (expected) | `teu_features.rextag_distance_ct` | 🔴 rebuild after F7 step-10 rerun (currently reflects 16-state data) |
+| 13 | `grain_transfer.rextag_distance_ct` | CONSOLE | 403 prod (expected) | `teu_features.rextag_distance_ct` | ✅ rebuilt 2026-09-24 (85,064 tracts, post-F7-fix) |
 | 14 | `grain_transfer.fcc_features_ct` | CONSOLE | 403 prod (expected) | `teu_features.telecom_features_ct` | ✅ run (85,395 tracts; FCC features re-derived at tract, ADR-0007) |
-| 15 | `grain_transfer.features_ct` | VM | ✅ renders | `teu_features.features_ct` | 🔴 rebuild after F7 (fiber-distance column currently ~91% spurious-null) |
+| 15 | `grain_transfer.features_ct` | VM | ✅ renders | `teu_features.features_ct` | ✅ **F7 verified resolved at CT grain**: `median_dist_nearest_fiber_miles` null 91% → 2.8% (85,395 tracts; median 0.27mi, p99 11.9mi, capped at 15mi); remaining nulls concentrate in PR/HI (zero rextag fiber) + genuine rural sparsity |
 | 16 | `features.parcel_features` | VM | ✅ bq-valid (14.93 GB) | `teu_features.parcel_features` | 🟡 re-run pending (miles fix applied) |
 | 17 | `scoring.build_scaling_params` | VM | ✅ renders | `teu_analytics.scaling_params` | ✅ validated |
 | 18 | `scoring.build_weights` | VM | ✅ renders | `teu_analytics.feature_weights` | ✅ validated |
@@ -222,9 +222,15 @@ Monitoring and validation modules are pure Python (read + return); not SQL steps
     staging rows from a prior run that the driver doesn't touch since PR isn't in
     its target list — cosmetically shows `processed_at IS NOT NULL` for PR, but
     the distance is still correctly null (PR has no fiber either way), so no
-    action needed. **Steps 13 (`rextag_distance_ct`) and 15 (`features_ct`) need
-    to be rebuilt next** to propagate the corrected parcel-grain distances up to
-    tract.
+    action needed.
+  → **Confirmed resolved end to end at the CT training grain (2026-09-24):**
+    steps 13 and 15 rebuilt. `features_ct`'s `median_dist_nearest_fiber_miles`
+    null rate collapsed **91% → 2.8%** (2,353 of 85,395 tracts), with a sane
+    distribution (median 0.27 mi, p99 11.9 mi, max capped at the 15-mile search
+    threshold). Remaining nulls concentrate in PR and HI (100%, zero rextag
+    fiber, expected) plus genuinely sparse rural states (ME 23.6%, WY 20%) — real
+    signal, not a coverage artifact. This closes the loop on the original bug
+    report that started this investigation. F7 is fully resolved.
 
 ## 3. Deliverables in flight
 
@@ -285,6 +291,6 @@ what ran, the table produced, row count, and whether the schema matched expectat
 | 9 | `features/rextag/01_fiber_optimize.sql` | 2026-09-01 13:03Z | `teu_telecom.int_rextag_fiberopticcables_optimized` | 2,712,222 | ✅ | Stored proc CREATE+CALL. Cleaned/optimised fiber geometry: original_fiber_id, num_points, geometry. Clustered. No F6. |
 | 10 | `features/rextag/02_fiber_distance.sql` | 2026-09-08 11:55Z | `teu_features.rextag_distance_parcel` | 154,563,179 | ✅ | 6 cols. `nearest_fiber_id` STRING (type fix confirmed), `dist_to_nearest_fiber_miles` FLOAT, `radius_fiber_count`. Rows = parcel master. Required one-time DROP of stale INT64 scratch (F6); staging-table ordering fix worked. |
 | 12 | `grain_transfer/01_location_growth_ct.sql` | 2026-09-08 11:59Z | `teu_features.loc_parcels_growth_ct` | 85,064 | ✅ | PROD+DEV. 18 cols, ~85K tracts. F3 miles fix live: `mean_dist_nearest_hotspot_miles` (FLOAT) + `median_dist_nearest_hotspot`; no stale `_m`. Reads steps 6+8 + PROD tract boundary. (Step 11 skipped — no read perm on neighborhood_scout; existing `demo_pop_ct` reused.) |
-| 13 | `grain_transfer/02_rextag_distance_ct.sql` | 2026-09-08 12:02Z | `teu_features.rextag_distance_ct` | 85,064 | ✅ | PROD+DEV. 6 cols. F3 miles fix live: `mean/median_dist_nearest_fiber_miles` (FLOAT); no `_m`. 91% of tracts NULL median fiber dist — inherited from step-10 threshold gating (see F7), not a rollup bug. |
+| 13 | `grain_transfer/02_rextag_distance_ct.sql` | 2026-09-08 12:02Z (superseded 2026-09-24) | `teu_features.rextag_distance_ct` | 85,064 | ✅ | PROD+DEV. 6 cols. F3 miles fix live: `mean/median_dist_nearest_fiber_miles` (FLOAT); no `_m`. **Rebuilt 2026-09-24 after F7 fix** — null rate collapsed from the original 91% (F7-era partial data) to the levels seen in `features_ct` below. |
 | 14 | `grain_transfer/03_fcc_features_ct.sql` | 2026-09-08 12:02Z | `teu_features.telecom_features_ct` | 85,395 | ✅ | PROD+DEV. 12 cols. FCC features re-derived at tract via shared fragment (ADR-0007). Spine = 85,395 populated tracts; cable/housing 0 nulls. |
-| 15 | `grain_transfer/04_features_ct.sql` | 2026-09-08 12:02Z | `teu_features.features_ct` | 85,395 | ✅ | DEV. Tract **training frame**. 15 cols = 2 keys + exactly the 13 model-named features `train.py` renames. Telecom spine; left-joins leave 362 growth-null, 1,301 pop-null, 78,012 fiber-null (all expected; fiber p99-filled downstream). |
+| 15 | `grain_transfer/04_features_ct.sql` | 2026-09-08 12:02Z (rebuilt 2026-09-24) | `teu_features.features_ct` | 85,395 | ✅ | DEV. Tract **training frame**. 15 cols = 2 keys + exactly the 13 model-named features `train.py` renames. Telecom spine; left-joins leave 362 growth-null, 1,301 pop-null. **Post-F7 rebuild:** fiber-null collapsed from 78,012 (91%) to **2,353 (2.8%)** — concentrated in PR/HI + genuinely sparse states; p99-fill still applied downstream for the residual. |
