@@ -10,6 +10,21 @@ from network_idx.modeling.cluster_metrics import (
     inertia_by_k,
     silhouette,
 )
+from network_idx.modeling.diagnostics import (
+    FEATURE_BUCKET,
+    cluster_profile,
+    feature_diagnostics,
+    fill_impact,
+    prepare_raw,
+    small_cluster_report,
+)
+from network_idx.modeling.policy_lab import (
+    build_filled,
+    compare_policies,
+    fit_policy,
+    GROWTH_COUNT_FEATURES,
+    POP_FEATURES,
+)
 from network_idx.modeling.artifacts import (
     artifact_path,
     build_run_artifact,
@@ -38,6 +53,17 @@ __all__ = [
     "davies_bouldin",
     "inertia",
     "inertia_by_k",
+    "FEATURE_BUCKET",
+    "cluster_profile",
+    "feature_diagnostics",
+    "fill_impact",
+    "prepare_raw",
+    "small_cluster_report",
+    "build_filled",
+    "compare_policies",
+    "fit_policy",
+    "GROWTH_COUNT_FEATURES",
+    "POP_FEATURES",
     "silhouette",
     "artifact_path",
     "build_run_artifact",

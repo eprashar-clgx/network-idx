@@ -1,0 +1,459 @@
+{
+  "run_id": "lightgbm_k8_v2",
+  "model": "lightgbm",
+  "k": 8,
+  "version": "v2",
+  "code_version": "b574a14a203b79b15ffc150ecc815a4b7a817648",
+  "training_data_table": "clgx-gis-app-dev-06e3.teu_features.features_ct",
+  "training_data_rows": 85395,
+  "created_at": "2026-09-25T04:15:41.474523+00:00",
+  "hyperparams": {
+    "objective": "multiclass",
+    "n_estimators": 500,
+    "learning_rate": 0.05,
+    "num_leaves": 31,
+    "n_jobs": -1
+  },
+  "fit_metrics": {
+    "kmeans": {
+      "inertia": 622522.1798280369,
+      "cluster_sizes": {
+        "0": 24548,
+        "1": 5187,
+        "2": 13127,
+        "3": 143,
+        "4": 27156,
+        "5": 540,
+        "6": 305,
+        "7": 14389
+      },
+      "silhouette": 0.14168465091727264,
+      "davies_bouldin": 1.4555066020682248,
+      "calinski_harabasz": 9554.651963601342
+    },
+    "classifier": {
+      "accuracy": 0.9809122313952807,
+      "macro_f1": 0.9799739370648682
+    }
+  },
+  "feature_cols": [
+    "landuse_change_qtr_mi_cnt",
+    "pre_early_dev_qtr_mi_cnt",
+    "bldr_dev_qtr_mi_cnt",
+    "new_permit_qtr_mi_cnt",
+    "dist_to_nearest_hotspot_miles",
+    "cable_penetration",
+    "fiber_opportunity_gap",
+    "fiber_speed_top_tier",
+    "dist_to_nearest_fiber_miles",
+    "provider_competitive_landscape_ord",
+    "pop_ch_avg",
+    "pop_pctch_avg",
+    "census_housing_units"
+  ],
+  "scaler": {
+    "mean_": [
+      0.11148340769366995,
+      4.817284627905645,
+      0.0886758147432528,
+      0.2244276596990456,
+      7.6006860813962,
+      0.6376801622920265,
+      0.5477074415833398,
+      0.44276037752816305,
+      1.306346924767549,
+      4.374822881901751,
+      3986.1967227589435,
+      0.6952482902980267,
+      1750.9172668189003
+    ],
+    "scale_": [
+      1.0445678977444421,
+      51.420289891562,
+      0.967442479113823,
+      1.282498238584908,
+      6.949046636900864,
+      0.30479890924658243,
+      0.33617248066809946,
+      0.2819095633798056,
+      2.6686126395035705,
+      1.1292940206268611,
+      7450.132089496957,
+      1.0575801234895978,
+      802.4343993652917
+    ]
+  },
+  "cluster_centers": [
+    [
+      -0.04216118582867283,
+      -0.08770149272004774,
+      -0.031208544754733128,
+      -0.03628389971902084,
+      -0.6650812411282868,
+      0.5741145335372139,
+      -0.7348438216732014,
+      0.46630267219814525,
+      -0.2955201493767561,
+      0.2518907355845787,
+      -0.04746000953582952,
+      0.15307765996370004,
+      -0.0579501630285077
+    ],
+    [
+      -0.07811939230223583,
+      0.13623330603628903,
+      -0.07013805185216733,
+      -0.11847091912774549,
+      1.0709211233660736,
+      -0.8104568272150496,
+      0.02855434217124864,
+      -0.12367944089480001,
+      3.2687533861308458,
+      -0.5147469162836785,
+      -0.5173385178844273,
+      -0.4203596881022817,
+      -0.2832105980742049
+    ],
+    [
+      0.041657339874768134,
+      -0.08137627399207796,
+      0.034221982742887055,
+      0.1843598957585629,
+      -0.6858417489554743,
+      -0.5614472597632731,
+      0.27009346721951855,
+      0.25136779974464946,
+      -0.3164901531205201,
+      0.5144528440760127,
+      1.6473146198964135,
+      1.1570151355830105,
+      0.6294961749965637
+    ],
+    [
+      17.989728438587896,
+      -0.08008480577004101,
+      1.6684185833044496,
+      0.457514196773627,
+      -0.6199150753831207,
+      -0.15390769849919397,
+      0.01090023129492652,
+      0.4613481345120053,
+      -0.2948236940058894,
+      0.3492517272960377,
+      0.5346653864541739,
+      0.6946819094972045,
+      0.5524258814608725
+    ],
+    [
+      -0.028188109302696916,
+      -0.08869484966887856,
+      -0.0459312518799,
+      -0.07124883105720703,
+      0.056833982001223755,
+      -0.010936188975536734,
+      0.9156918283737892,
+      -0.9205304936862322,
+      -0.20717658516914592,
+      -0.5109989025525741,
+      -0.3795778442034282,
+      -0.3523542719095049,
+      -0.14773149566162572
+    ],
+    [
+      -0.10672681779173818,
+      11.414095262039021,
+      0.00596276246467463,
+      -0.1749925675895478,
+      1.604374714157302,
+      0.0761864600825633,
+      -0.008783795538304792,
+      0.6758546637908939,
+      3.9484306136747094,
+      0.16823956334029042,
+      -0.5350504762698907,
+      -0.6573953829653882,
+      -0.1421607477402992
+    ],
+    [
+      0.6151969195584894,
+      0.1968814061531189,
+      9.31619170097722,
+      10.889477938103681,
+      -1.0230016949354563,
+      -0.15414405276115953,
+      0.015204110445064504,
+      0.03168473486225296,
+      0.04553565129855424,
+      0.11810373292837417,
+      0.6389302492182124,
+      0.7948192006643414,
+      0.26094460814246606
+    ],
+    [
+      -0.07235349339901956,
+      -0.08957592355977358,
+      -0.08010241888209114,
+      -0.15733916233566367,
+      1.2325944891972105,
+      -0.1538075998048823,
+      -0.7308125584928568,
+      0.7271324912252395,
+      -0.14088782751484902,
+      0.23989891082428788,
+      -0.5136040837874629,
+      -0.496214368079107,
+      -0.09865568402967806
+    ]
+  ],
+  "feature_weights": [
+    {
+      "run_id": "lightgbm_k8_v2",
+      "feature": "landuse_change_qtr_mi_cnt",
+      "bucket": "growth",
+      "mean_abs_shap": 0.030926558637065792,
+      "weight_overall": 0.0043505124858074316,
+      "weight_in_bucket": 0.021770611137199806,
+      "bucket_weight": 0.19983419199351912,
+      "created_at": "2026-09-25T04:15:40.683553+00:00"
+    },
+    {
+      "run_id": "lightgbm_k8_v2",
+      "feature": "pre_early_dev_qtr_mi_cnt",
+      "bucket": "growth",
+      "mean_abs_shap": 0.09129695456413527,
+      "weight_overall": 0.012842959522545447,
+      "weight_in_bucket": 0.06426807842254523,
+      "bucket_weight": 0.19983419199351912,
+      "created_at": "2026-09-25T04:15:40.683553+00:00"
+    },
+    {
+      "run_id": "lightgbm_k8_v2",
+      "feature": "bldr_dev_qtr_mi_cnt",
+      "bucket": "growth",
+      "mean_abs_shap": 0.037680772057564836,
+      "weight_overall": 0.005300643735860965,
+      "weight_in_bucket": 0.026525209139549408,
+      "bucket_weight": 0.19983419199351912,
+      "created_at": "2026-09-25T04:15:40.683553+00:00"
+    },
+    {
+      "run_id": "lightgbm_k8_v2",
+      "feature": "new_permit_qtr_mi_cnt",
+      "bucket": "growth",
+      "mean_abs_shap": 0.08686429362415318,
+      "weight_overall": 0.012219406575997087,
+      "weight_in_bucket": 0.06114772679338768,
+      "bucket_weight": 0.19983419199351912,
+      "created_at": "2026-09-25T04:15:40.683553+00:00"
+    },
+    {
+      "run_id": "lightgbm_k8_v2",
+      "feature": "dist_to_nearest_hotspot_miles",
+      "bucket": "growth",
+      "mean_abs_shap": 1.1737959813935295,
+      "weight_overall": 0.1651206696733082,
+      "weight_in_bucket": 0.826288374507318,
+      "bucket_weight": 0.19983419199351912,
+      "created_at": "2026-09-25T04:15:40.683553+00:00"
+    },
+    {
+      "run_id": "lightgbm_k8_v2",
+      "feature": "cable_penetration",
+      "bucket": "telecom",
+      "mean_abs_shap": 0.7273780268225365,
+      "weight_overall": 0.10232199530279364,
+      "weight_in_bucket": 0.1820512176357995,
+      "bucket_weight": 0.5620505956048738,
+      "created_at": "2026-09-25T04:15:40.683553+00:00"
+    },
+    {
+      "run_id": "lightgbm_k8_v2",
+      "feature": "fiber_opportunity_gap",
+      "bucket": "telecom",
+      "mean_abs_shap": 1.128002278255258,
+      "weight_overall": 0.15867876064578276,
+      "weight_in_bucket": 0.2823211324507433,
+      "bucket_weight": 0.5620505956048738,
+      "created_at": "2026-09-25T04:15:40.683553+00:00"
+    },
+    {
+      "run_id": "lightgbm_k8_v2",
+      "feature": "fiber_speed_top_tier",
+      "bucket": "telecom",
+      "mean_abs_shap": 1.0052861646125886,
+      "weight_overall": 0.1414159933628967,
+      "weight_in_bucket": 0.2516072297916633,
+      "bucket_weight": 0.5620505956048738,
+      "created_at": "2026-09-25T04:15:40.683553+00:00"
+    },
+    {
+      "run_id": "lightgbm_k8_v2",
+      "feature": "dist_to_nearest_fiber_miles",
+      "bucket": "telecom",
+      "mean_abs_shap": 0.599718981946531,
+      "weight_overall": 0.0843638941387772,
+      "weight_in_bucket": 0.1501001774546392,
+      "bucket_weight": 0.5620505956048738,
+      "created_at": "2026-09-25T04:15:40.683553+00:00"
+    },
+    {
+      "run_id": "lightgbm_k8_v2",
+      "feature": "provider_competitive_landscape_ord",
+      "bucket": "telecom",
+      "mean_abs_shap": 0.5350727291355121,
+      "weight_overall": 0.07526995215462359,
+      "weight_in_bucket": 0.1339202426671548,
+      "bucket_weight": 0.5620505956048738,
+      "created_at": "2026-09-25T04:15:40.683553+00:00"
+    },
+    {
+      "run_id": "lightgbm_k8_v2",
+      "feature": "pop_ch_avg",
+      "bucket": "demo",
+      "mean_abs_shap": 0.8053468821644911,
+      "weight_overall": 0.11329005943983432,
+      "weight_in_bucket": 0.4757783356098997,
+      "bucket_weight": 0.238115212401607,
+      "created_at": "2026-09-25T04:15:40.683553+00:00"
+    },
+    {
+      "run_id": "lightgbm_k8_v2",
+      "feature": "pop_pctch_avg",
+      "bucket": "demo",
+      "mean_abs_shap": 0.558205541602492,
+      "weight_overall": 0.07852409984853546,
+      "weight_in_bucket": 0.3297735539722515,
+      "bucket_weight": 0.238115212401607,
+      "created_at": "2026-09-25T04:15:40.683553+00:00"
+    },
+    {
+      "run_id": "lightgbm_k8_v2",
+      "feature": "census_housing_units",
+      "bucket": "demo",
+      "mean_abs_shap": 0.3291410468848865,
+      "weight_overall": 0.0463010531132372,
+      "weight_in_bucket": 0.19444811041784882,
+      "bucket_weight": 0.238115212401607,
+      "created_at": "2026-09-25T04:15:40.683553+00:00"
+    }
+  ],
+  "scaling_params": [
+    {
+      "run_id": "lightgbm_k8_v2",
+      "feature": "landuse_change_qtr_mi_cnt",
+      "na_fill": 0.0,
+      "min_val": 0.0,
+      "max_val": 113.0,
+      "invert": false,
+      "created_at": "2026-09-25T04:15:41.469526+00:00"
+    },
+    {
+      "run_id": "lightgbm_k8_v2",
+      "feature": "pre_early_dev_qtr_mi_cnt",
+      "na_fill": 0.0,
+      "min_val": 0.0,
+      "max_val": 1158.0,
+      "invert": false,
+      "created_at": "2026-09-25T04:15:41.469526+00:00"
+    },
+    {
+      "run_id": "lightgbm_k8_v2",
+      "feature": "bldr_dev_qtr_mi_cnt",
+      "na_fill": 0.0,
+      "min_val": 0.0,
+      "max_val": 243.0,
+      "invert": false,
+      "created_at": "2026-09-25T04:15:41.469526+00:00"
+    },
+    {
+      "run_id": "lightgbm_k8_v2",
+      "feature": "new_permit_qtr_mi_cnt",
+      "na_fill": 0.0,
+      "min_val": 0.0,
+      "max_val": 141.0,
+      "invert": false,
+      "created_at": "2026-09-25T04:15:41.469526+00:00"
+    },
+    {
+      "run_id": "lightgbm_k8_v2",
+      "feature": "dist_to_nearest_hotspot_miles",
+      "na_fill": 18.749921820071947,
+      "min_val": 0.0,
+      "max_val": 18.749921820071947,
+      "invert": true,
+      "created_at": "2026-09-25T04:15:41.469526+00:00"
+    },
+    {
+      "run_id": "lightgbm_k8_v2",
+      "feature": "cable_penetration",
+      "na_fill": 0.0,
+      "min_val": 0.0,
+      "max_val": 1.0,
+      "invert": true,
+      "created_at": "2026-09-25T04:15:41.469526+00:00"
+    },
+    {
+      "run_id": "lightgbm_k8_v2",
+      "feature": "fiber_opportunity_gap",
+      "na_fill": 1.0,
+      "min_val": 0.0,
+      "max_val": 1.0,
+      "invert": false,
+      "created_at": "2026-09-25T04:15:41.469526+00:00"
+    },
+    {
+      "run_id": "lightgbm_k8_v2",
+      "feature": "fiber_speed_top_tier",
+      "na_fill": 0.0,
+      "min_val": 0.0,
+      "max_val": 1.0,
+      "invert": true,
+      "created_at": "2026-09-25T04:15:41.469526+00:00"
+    },
+    {
+      "run_id": "lightgbm_k8_v2",
+      "feature": "dist_to_nearest_fiber_miles",
+      "na_fill": 12.577777836696999,
+      "min_val": 7.319728227357395e-10,
+      "max_val": 12.577777836696999,
+      "invert": true,
+      "created_at": "2026-09-25T04:15:41.469526+00:00"
+    },
+    {
+      "run_id": "lightgbm_k8_v2",
+      "feature": "provider_competitive_landscape_ord",
+      "na_fill": 0.0,
+      "min_val": 0.0,
+      "max_val": 6.0,
+      "invert": true,
+      "created_at": "2026-09-25T04:15:41.469526+00:00"
+    },
+    {
+      "run_id": "lightgbm_k8_v2",
+      "feature": "pop_ch_avg",
+      "na_fill": 0.0,
+      "min_val": -15579.0,
+      "max_val": 42473.0,
+      "invert": false,
+      "created_at": "2026-09-25T04:15:41.469526+00:00"
+    },
+    {
+      "run_id": "lightgbm_k8_v2",
+      "feature": "pop_pctch_avg",
+      "na_fill": 0.0,
+      "min_val": -33.33,
+      "max_val": 7.27,
+      "invert": false,
+      "created_at": "2026-09-25T04:15:41.469526+00:00"
+    },
+    {
+      "run_id": "lightgbm_k8_v2",
+      "feature": "census_housing_units",
+      "na_fill": 0.0,
+      "min_val": 0.0,
+      "max_val": 5432.0,
+      "invert": false,
+      "created_at": "2026-09-25T04:15:41.469526+00:00"
+    }
+  ]
+}

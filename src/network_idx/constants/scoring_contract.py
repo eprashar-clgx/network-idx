@@ -44,12 +44,19 @@ SCORING_BUCKETS = {
     "demo": DEMO_FEATURES,
 }
 
-# v1 group weights (raw-SHAP group shares). The weight builder recomputes these from
-# the model and asserts they match before writing the run.
+# v2 group weights (raw-SHAP group shares). The weight builder recomputes these from
+# the model and asserts they match before writing the run, so they act as a
+# regression guard: a refit that moves a bucket by more than the tolerance means the
+# feature population or the scaling contract changed, and that should be a decision
+# rather than a surprise.
+#
+# These replaced the v1 shares (growth 0.169, telecom 0.591, demo 0.240), which were
+# fit before the F7 fiber-distance fix and before the population features were
+# bounded. See notebooks/05_modeling_diagnostics.ipynb.
 SCORING_BUCKET_WEIGHTS = {
-    "growth": 0.169,
-    "telecom": 0.591,
-    "demo": 0.240,
+    "growth": 0.200,
+    "telecom": 0.562,
+    "demo": 0.238,
 }
 
 # Features where a LOWER raw value means a HIGHER opportunity score (invert on scaling).
@@ -113,13 +120,27 @@ SCALING_CAP_AS_MAX = {
 }
 
 # Upper winsorize caps that are NOT the null fill (the fill stays per
-# SCALING_NA_FILL_RULES). Growth counts have a fat right tail; the model was
-# trained winsorised at the 99.5th percentile.
+# SCALING_NA_FILL_RULES).
+#
+# Growth counts have a fat right tail AND are 87-96% zero, so a cap set too low
+# lands in the body of the distribution rather than the tail: at P99.5 three of
+# the four collapse to 5-8 distinct values, which destroys both their model signal
+# and their value as delivered customer columns. P99.99 retains 35-41 distinct
+# values while still clipping the extreme tail.
+#
+# Population features were previously unbounded, which let a handful of corrupt
+# tracts (population change in the millions against zero housing units) capture a
+# KMeans centroid and dominate the SHAP attribution that sets the bucket weights.
+# They are capped at P99.9 rather than P99.99 deliberately: the P99.99 cap sits at
+# ~621k, still above the corrupt values, and re-admits the degenerate cluster.
+# See notebooks/05_modeling_diagnostics.ipynb for the policy comparison.
 SCALING_WINSORIZE_QUANTILE = {
-    "landuse_change_qtr_mi_cnt": 0.995,
-    "pre_early_dev_qtr_mi_cnt": 0.995,
-    "bldr_dev_qtr_mi_cnt": 0.995,
-    "new_permit_qtr_mi_cnt": 0.995,
+    "landuse_change_qtr_mi_cnt": 0.9999,
+    "pre_early_dev_qtr_mi_cnt": 0.9999,
+    "bldr_dev_qtr_mi_cnt": 0.9999,
+    "new_permit_qtr_mi_cnt": 0.9999,
+    "pop_ch_avg": 0.999,
+    "pop_pctch_avg": 0.999,
 }
 
 # Proportion features bounded to the fixed domain [0, 1] at scoring time. Values

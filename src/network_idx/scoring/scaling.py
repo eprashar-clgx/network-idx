@@ -67,12 +67,43 @@ def apply_feature_fills(df: pd.DataFrame, features=ALL_SCORING_FEATURES) -> pd.D
     return out
 
 
+def quantile_offset(q: float) -> tuple:
+    """Resolve a winsorize quantile to the ``(num_quantiles, offset)`` pair that
+    addresses it exactly in ``APPROX_QUANTILES(expr, num_quantiles)[OFFSET(offset)]``.
+
+    The bucket count must be fine enough that ``q`` lands on an integer boundary.
+    A fixed 1000 silently breaks for quantiles finer than a thousandth: 0.9999
+    rounds to ``OFFSET(1000)``, which is the *maximum* of a 1000-bucket split, so
+    the cap becomes a no-op and nothing is winsorized. Scale the bucket count by
+    powers of ten until ``q * n`` is integral, and refuse anything beyond
+    BigQuery's one-million ceiling rather than emit a query that quietly caps at
+    the max.
+    """
+    n = 1000
+    while n <= 1_000_000:
+        scaled = q * n
+        if abs(scaled - round(scaled)) < 1e-9:
+            offset = int(round(scaled))
+            if offset >= n:
+                raise ValueError(
+                    f"Winsorize quantile {q} resolves to OFFSET({offset}) of "
+                    f"{n} buckets, which is the maximum — that is a no-op cap."
+                )
+            return n, offset
+        n *= 10
+    raise ValueError(
+        f"Winsorize quantile {q} is finer than BigQuery's 1,000,000-bucket limit."
+    )
+
+
 def build_stats_query(source_table: str) -> str:
     """Single-scan aggregation for all features (NULLs ignored by MIN/MAX/quantiles).
     Bounds by category:
       * domain-bounded (SCALING_DOMAIN_BOUNDS): fixed [0,1] — no scan.
-      * winsorized (SCALING_WINSORIZE_QUANTILE): max = the P99.5 quantile so growth
-        counts are winsorized at scoring exactly as in training.
+      * winsorized (SCALING_WINSORIZE_QUANTILE): max = that feature's configured
+        quantile, so it is winsorized at scoring exactly as in training. The bucket
+        count is derived per feature by :func:`quantile_offset`, since the growth
+        counts and the population features sit at different precisions.
       * cap-as-max (SCALING_CAP_AS_MAX): max = P99 / rawmax*1.25 distance cap.
       * const: min/max over the FILLED column so the NA fill sits inside the range."""
     const_features = [f for f in ALL_SCORING_FEATURES
@@ -89,10 +120,11 @@ def build_stats_query(source_table: str) -> str:
         parts.append(f"MAX(COALESCE(`{f}`, {fill})) AS `{f}__max`")
     for f in winsor_features:
         fill = SCALING_NA_FILL_RULES[f]
-        off = int(round(SCALING_WINSORIZE_QUANTILE[f] * 1000))
+        buckets, off = quantile_offset(SCALING_WINSORIZE_QUANTILE[f])
         parts.append(f"MIN(COALESCE(`{f}`, {fill})) AS `{f}__min`")
         parts.append(
-            f"APPROX_QUANTILES(COALESCE(`{f}`, {fill}), 1000)[OFFSET({off})] AS `{f}__winmax`"
+            f"APPROX_QUANTILES(COALESCE(`{f}`, {fill}), {buckets})"
+            f"[OFFSET({off})] AS `{f}__winmax`"
         )
     for f in cap_features:
         parts.append(f"MIN(`{f}`) AS `{f}__min`")

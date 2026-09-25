@@ -57,10 +57,10 @@ read access) or only `DEV_PROJECT` tables produced by earlier steps.
 04 ─────> 14 fcc_features_ct  (PROD+DEV)                                             │
 11,12,13,14 ──> 15 features_ct  (tract training frame)                               │
                        └──> 16 parcel_features ──> 17 scaling_params
-                                              └──> 18 parcel_score
+                                              └──> 18 parcel_score ──> 19 delivery
 ```
 (05 also needs 01; 04 also needs 02 + census blocks. Steps 14→15 are the tract
-training-frame path the model is fit on; 16→18 are the parcel scoring path. Both
+training-frame path the model is fit on; 16→19 are the parcel scoring path. Both
 carry the same thirteen model features — train/score parity.)
 
 | Seq | File | Reads | Depends on | Produces (dataset.table) |
@@ -83,16 +83,26 @@ carry the same thirteen model features — train/score parity.)
 | 16 | `features/parcel_features.sql` | DEV | 5, 7, 8, 10, 11, 12, 13 | `teu_features.parcel_features` |
 | 17 | `scoring/01_scaling_params_scan.sql` | DEV | 16 | `teu_analytics.scaling_params` |
 | 18 | `scoring/02_parcel_score.sql` | DEV | 16 + fitted weights/scaling | `teu_outputs.parcel_scores` |
+| 19 | `scoring/03_delivery.sql` | DEV | 6, 16, 18 + fitted weights/scaling | `teu_outputs.fiber_idx_v1_parcel` |
 
 Steps 3 & 4 read the Census block tables from Stage-0 in addition to step 2's
 `fcc_coverage_summary`.
 
 ## 5. Scoring files are pipeline-generated
 
-`scoring/01_*` and `scoring/02_*` bake in numeric weights and min/max scaling
-constants from a **specific fitted model run**. They change every time the model
-is refit. Regenerate them from the module rather than hand-editing values. They
-are included so the DE can review the final scoring pushdown.
+`scoring/01_*`, `scoring/02_*` and `scoring/03_*` bake in numeric weights and
+min/max scaling constants from a **specific fitted model run** (currently
+`lightgbm_k8_v2`). They change every time the model is refit. Regenerate them
+with the generator rather than hand-editing values, and never by shell
+redirection — the package writes credential and progress messages to stdout, and
+a piped `--dry-run` has previously captured an error string into a committed
+`.sql` file:
+
+```bash
+GCS_PROJECT_ID=clgx-gis-app-dev-06e3 poetry run python scripts/generate_scoring_sql.py
+```
+
+They are included so the DE can review the final scoring pushdown.
 
 ## 6. Regenerating this folder
 
