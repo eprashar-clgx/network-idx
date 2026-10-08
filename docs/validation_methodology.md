@@ -7,7 +7,7 @@ plus `idx_growth` / `idx_telecom` / `idx_demo` sub-indices) by taking 13 feature
 across three buckets (growth @ parcel, FCC @ block, demo @ tract), weighting them by
 mean(|SHAP|) from a LightGBM classifier, and combining as a weighted average of
 sub-indices. See [weightage_methodology.MD](weightage_methodology.MD) and
-[parcel_scoring_qa.md](parcel_scoring_qa.md).
+[QA.md](QA.md) *(local working doc — gitignored)*.
 
 There is **no observed label** for "fiber potential." This is the defining feature of
 a *composite indicator* (a.k.a. composite index): it measures a latent construct that
@@ -125,7 +125,7 @@ Re-run scoring under a grid of defensible alternatives and measure how much parc
 - **Aggregation:** linear (current) vs. geometric mean (penalizes imbalance across
   buckets — recommended by the handbook when compensability is a concern).
 - **NA fills:** the `1.25×max` hotspot fill and P99 fiber-distance cap (both flagged as
-  tunable in [parcel_scoring_qa.md](parcel_scoring_qa.md) G1/G2/F4).
+  tunable in [QA.md](QA.md) §3 and QA-11).
 
 **Metric:** for a stratified sample of parcels, report median and 90% interval of the
 **rank shift** (in percentile points) across all scenarios; and average
@@ -160,7 +160,7 @@ Fiber opportunity should be spatially smooth (adjacent parcels share reality) bu
 
 ### A4. Face-plausibility of the distribution
 Sanity histograms and choropleths by density tier (urban/suburban/exurban/rural, per
-the tiers in [distance_methodology_semivariogram.md](distance_methodology_semivariogram.md)):
+the tiers in [distance_methodology_semivariogram.md](archive/distance_methodology_semivariogram.md)):
 established fiber metros should skew low on *opportunity*; fast-growing exurban fringe
 should skew high. A U-shaped or degenerate distribution is a red flag.
 
@@ -261,9 +261,9 @@ audit** with measurable inter-rater agreement, not an ad-hoc "looks right."
   *each other*, the construct is ill-defined and no index can match it; this bounds the
   achievable agreement.
 - **Structured error taxonomy:** for every large disagreement, tag the cause (bad
-  feature value, wrong grain broadcast, NA-fill artifact per G1, stale FCC vintage,
+  feature value, wrong grain broadcast, NA-fill artifact per QA-1, stale FCC vintage,
   genuine model gap). This feeds directly back into the pipeline QC in
-  [parcel_scoring_qa.md](parcel_scoring_qa.md).
+  [QA.md](QA.md).
 
 **Pass criterion (suggested):** expert–index weighted κ ≥ 0.4 (moderate) *and*
 expert–index κ not materially below expert–expert κ (i.e., the index is about as close

@@ -10,7 +10,7 @@ module spine, the data flow, and — most importantly — **where each piece of 
   (0001), modeling two-interface seam (0002), BigQuery-prod source-of-truth (0003),
   composite-indicator validation stance (0004).
 - The previous (current-state) description is preserved at
-  [`repo_structure.prev.md`](docs/archive/repo_structure.prev.md) during migration.
+  [`repo_structure.prev.md`](archive/repo_structure.prev.md) during migration.
 
 ---
 
@@ -41,7 +41,7 @@ flowchart LR
 | `sources` | Ingest raw data behind adapters (ADR-0003) | per refresh | *reads only* — FCC ×5 (`edr_ent_common_reference_ext`), NeighborhoodScout + tract geometry; Census BAF/ACL downloaded (not BQ) |
 | `processing` | Reshape the still-downloaded **Census** data → block tables (ADR-0006) | per refresh | `census_baf_block`, `census_acl_block` ¹ |
 | `features` | Build features per **source family**, in `transform` + `engineered` layers | per refresh | `fcc_fixed_speeds_block`, `fcc_coverage_block`, `telecom_features_block`; `demo_pop_ct`; `loc_growth_cnts_parcel`, `loc_growth_distance_parcel`; `rextag_distance_parcel` |
-| `grain_transfer` | Move features across grains (aggregate-up / broadcast-down) | per refresh | `fcc_fixed_speeds_ct`, `fcc_fixed_coverage_ct(_bucketed)`, `loc_parcels_growth_ct`, `rextag_distance_ct` → `all_features_tract` |
+| `grain_transfer` | Move features across grains (aggregate-up / broadcast-down) | per refresh | `loc_parcels_growth_ct`, `rextag_distance_ct`, `telecom_features_ct` → `features_ct` |
 | `modeling` | Derive scoring rules: `train` + `fit_scoring_rules` (ADR-0002) | model ≪ data | `feature_weights`, `scaling_params` (`teu_analytics`) |
 | `scoring` | Apply frozen weights + scaling params → index + delivery | per refresh | `parcel_features`, `parcel_scores`, `fiber_idx_v1_parcel` + 3 QA (`teu_outputs`) |
 | `monitoring` | Every-run health + data-contract gate + business rollups | every run | *reads outputs* → health/business rollups |
@@ -143,7 +143,6 @@ src/network_idx/
 │   ├── scaling.py            #   scaling_params fit/apply (the parity layer)
 │   ├── weights.py            #   feature_weights read/write
 │   ├── build_scaling_params.py   # thin driver over modeling.fit_rules
-│   ├── build_weights.py          # thin driver over modeling.fit_rules
 │   └── parcel_score.py       #   scale → sub-indices → weighted-avg → 0-100 + delivery
 │
 ├── monitoring/               # every-run health (simple/frequent)
@@ -247,8 +246,8 @@ they are.
   per `run_id` in `scaling_params`. This is the parity guarantee — do not fork it.
 - **Scored universe ⊃ training population:** the model trains on filtered tracts; scoring
   covers every parcel. NA rules cover degenerate blocks.
-- **Weights source of truth:** `constants.py SCORING_BUCKET_WEIGHTS`. (The stale
-  `parcel_scoring_qa.md` numbers are to be refreshed after the rewire + rerun.)
+- **Weights source of truth:** `constants/scoring_contract.py SCORING_BUCKET_WEIGHTS`
+  (v2: growth 0.200 / telecom 0.562 / demo 0.238).
 
 ---
 
@@ -290,7 +289,8 @@ they are.
 - [ ] Expand `monitoring/business_rollups.py` beyond the seed set (many more business cuts).
 - [ ] Refine the `monitoring` ↔ `validation` line and add `validation` sub-modules as the
       dossier grows (ADR-0001 anticipates this).
-- [ ] Refresh `constants.py` weights + `parcel_scoring_qa.md` after the rewire and a full rerun.
+- [x] Refresh the scoring-contract weights after the rewire and a full rerun — done (v2,
+      2026-09-25); QA/variable-semantics notes now live in the gitignored `docs/QA.md`.
 - [ ] Confirm distance-table units end-to-end (miles) once wiring is complete.
 - [ ] Start archiving per-`run_id` feature+score snapshots so the temporal axis (C) is possible.
 
@@ -315,7 +315,7 @@ flowchart TB
   SRC["<b>sources</b> — read-only (prod project)<br/>FCC ×5 · NeighborhoodScout · tract geometry<br/>+ Census BAF/ACL downloaded (files)"]
   PROC["<b>processing</b> → block<br/>census_baf_block · census_acl_block ¹"]
   FEAT["<b>features</b> (per source family)<br/>telecom @block: fcc_fixed_speeds_block, fcc_coverage_block, telecom_features_block<br/>demographic @tract: demo_pop_ct<br/>location @parcel: loc_growth_cnts_parcel, loc_growth_distance_parcel<br/>rextag @parcel: rextag_distance_parcel"]
-  GT["<b>grain_transfer</b> → tract (for modeling)<br/>fcc_fixed_speeds_ct · fcc_fixed_coverage_ct(_bucketed)<br/>loc_parcels_growth_ct · rextag_distance_ct → all_features_tract"]
+  GT["<b>grain_transfer</b> → tract (for modeling)<br/>telecom_features_ct · loc_parcels_growth_ct<br/>rextag_distance_ct → features_ct"]
   MODEL["<b>modeling</b> (teu_analytics)<br/>feature_weights · scaling_params"]
   SCORE["<b>scoring</b> → parcel (teu_outputs)<br/>parcel_features → parcel_scores → fiber_idx_v1_parcel + 3 QA"]
   SRC --> PROC --> FEAT
@@ -368,20 +368,18 @@ data-contract coverage.
 
 | Table | Dataset | Grain | Tier | Test |
 | --- | --- | --- | --- | --- |
-| `fcc_fixed_speeds_ct` | `teu_features` | tract | Persist | Med |
-| `fcc_fixed_coverage_ct`, `fcc_fixed_coverage_ct_bucketed_speeds` | `teu_features` | tract | Persist | Med |
+| `telecom_features_ct` | `teu_features` | tract | Persist | Med |
 | `loc_parcels_growth_ct` | `teu_features` | tract | Persist | Med |
 | `rextag_distance_ct` | `teu_features` | tract | Persist | Med |
-| `all_features_tract` | `teu_features` | tract | **Persist** (modeling input) | High |
+| `features_ct` | `teu_features` | tract | **Persist** (modeling input) | High |
 
 **Modeling — analytics + artifacts**
 
 | Table | Dataset | Grain | Tier | Test |
 | --- | --- | --- | --- | --- |
-| `all_feature_engg_tract`, `post_corr_all_features_for_clustering_tract` | `teu_analytics` | tract | Transient (analysis) | Low |
-| `results_clustering_k8_tract` | `teu_analytics` | tract | Persist (analysis artifact) | Low |
 | `feature_weights` | `teu_analytics` | feature × run | **Persist** (key artifact) | High |
 | `scaling_params` | `teu_analytics` | feature × run | **Persist** (key artifact) | High |
+| `scoring_runs` | `teu_analytics` | run | **Persist** (run registry) | High |
 
 **Scoring — parcel + delivery**
 
@@ -390,7 +388,6 @@ data-contract coverage.
 | `parcel_features` | `teu_features` | parcel | **Persist** (scoring input) | High |
 | `parcel_scores` | `teu_outputs` | parcel | Persist | High |
 | `fiber_idx_v1_parcel` | `teu_outputs` | parcel | **Persist** (delivery) | High |
-| `fiber_idx_v1_parcel_qa_minmax`, `..._qa_fillrates`, `..._qa_index_buckets` | `teu_outputs` | summary | Persist (QA) | Med |
 
 ### 8.3 Data Engineering Questions
 
@@ -402,7 +399,7 @@ data-contract coverage.
    BQ? This is the one gap where a "processing" output is not yet in BQ (ADR-0006).
 3. **Data-contract scope** — Which tables get the input gate (schema, row counts, key
    uniqueness, null/fill thresholds) enforced as a hard halt vs. a soft alert? Raw FCC/demo and
-   `all_features_tract` / `parcel_features` are the High-priority candidates.
+   `features_ct` / `parcel_features` are the High-priority candidates.
 4. **Run versioning & retention** — `feature_weights`, `scaling_params`, `parcel_scores`, and
    `fiber_idx_v1_parcel` are keyed by `run_id`. Partition/cluster by `run_id`? Retention policy
    for old runs (needed for the temporal validation axis)?

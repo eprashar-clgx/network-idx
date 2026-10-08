@@ -128,11 +128,14 @@ SCALING_CAP_AS_MAX = {
 # and their value as delivered customer columns. P99.99 retains 35-41 distinct
 # values while still clipping the extreme tail.
 #
-# Population features were previously unbounded, which let a handful of corrupt
-# tracts (population change in the millions against zero housing units) capture a
-# KMeans centroid and dominate the SHAP attribution that sets the bucket weights.
+# Population features were previously unbounded, which let a handful of tracts with
+# extreme population change (change in the millions against near-zero housing units)
+# capture a KMeans centroid and dominate the SHAP attribution that sets the bucket
+# weights. Those values are REAL, not corrupt: they trace to a thin 2022 population
+# baseline in ~155 tracts in the upstream NeighborhoodScout series, which inflates every
+# since-2022 measure for those tracts (see docs/QA.md QA-2/QA-4).
 # They are capped at P99.9 rather than P99.99 deliberately: the P99.99 cap sits at
-# ~621k, still above the corrupt values, and re-admits the degenerate cluster.
+# ~621k, still above those values, and re-admits the degenerate cluster.
 # See notebooks/05_modeling_diagnostics.ipynb for the policy comparison.
 SCALING_WINSORIZE_QUANTILE = {
     "landuse_change_qtr_mi_cnt": 0.9999,

@@ -3,9 +3,13 @@
 > **What this is.** A code-verified, module-by-module inventory of the BigQuery tables the
 > pipeline actually writes: fully-qualified names, the source file that produces each, the
 > grain, the persistence tier, and — unlike [`repo_structure.md`](./repo_structure.md),
-> which describes the **target** architecture — the **build status as of 2026-08-24**
+> which describes the **target** architecture — the **build status as of 2026-10-08**
 > (what exists in `src` today vs. what is still filled by the legacy `feature_engg/` +
 > `transfer/` bridge).
+>
+> Every BigQuery compute step below is also emitted as runnable SQL under
+> [`sql/`](../sql/README.md); that README's numbered run order (steps 1–19) is the
+> execution contract, and the step numbers are cited inline here.
 >
 > **Relationship to `repo_structure.md`.** That document is the source of truth for the
 > module spine, the `transform`/`engineered` split, the logic-location map (§4), and the
@@ -29,9 +33,9 @@ flowchart LR
   SRC["<b>sources</b><br/>——<br/>read-only<br/>(no persisted<br/>outputs)"]
   PROC["<b>processing</b><br/>——<br/>census_baf_block<br/>census_acl_block"]
   FEAT["<b>features</b><br/>——<br/>fcc_coverage_block<br/>fcc_fixed_speeds_block<br/>telecom_features_block<br/>demo_pop_ct<br/>loc_growth_cnts_parcel<br/>loc_growth_distance_parcel<br/>rextag_distance_parcel<br/>parcel_features*"]
-  GT["<b>grain_transfer</b><br/>——<br/>fcc_fixed_speeds_ct<br/>fcc_fixed_coverage_ct<br/>(_bucketed_speeds)<br/>loc_parcels_growth_ct<br/>rextag_distance_ct<br/>all_features_tract"]
+  GT["<b>grain_transfer</b><br/>——<br/>loc_parcels_growth_ct<br/>rextag_distance_ct<br/>telecom_features_ct<br/>features_ct"]
   MODEL["<b>modeling</b><br/>——<br/>feature_weights<br/>scaling_params<br/>scoring_runs"]
-  SCORE["<b>scoring</b><br/>——<br/>parcel_scores<br/>fiber_idx_v1_parcel<br/>+ 3 QA tables"]
+  SCORE["<b>scoring</b><br/>——<br/>parcel_scores<br/>fiber_idx_v1_parcel"]
   MON["<b>monitoring</b><br/>——<br/>read-only<br/>(no tables)"]
   VAL["<b>validation</b> 🟡<br/>built<br/>——<br/>dossier<br/>(no tables)"]
 
@@ -51,9 +55,9 @@ flowchart LR
 | `sources` | ✅ | Census download + BQ-prod adapter |
 | `processing` | ✅ | Census → block |
 | `features` (telecom/location/rextag/demographic + parcel assembly) | ✅ | all five families migrated |
-| `grain_transfer` | 🟡 partial | spec-driven `promote` + BQ/DuckDB adapters built; 2 parcel→tract CT runners ported; FCC `*_ct` still on legacy bridge |
-| `modeling` | ✅ | `train` + `fit_rules` + `registry` (run registry `scoring_runs` is new) |
-| `scoring` | ✅ | rewired to resolve artifacts from the run registry |
+| `grain_transfer` | ✅ | all four CT tables produced by `src` runners with committed SQL (steps 12–15); legacy bridge retired |
+| `modeling` | ✅ | `run_training` driver → `fit_rules` + `registry` + JSON run artifact |
+| `scoring` | ✅ | rewired to resolve artifacts from the run registry; QA path retired in favour of `monitoring` |
 | `monitoring` | 🟢 | conservation gate + feature distributions/bands + business rollups + drift (vs `monitoring_baseline`) + train/scoring parity all built |
 | `validation` | 🟡 | four-axis construct-validity kernels built + tested (internal/external/temporal/expert + dossier); external-data loaders and archived-snapshot wiring deferred |
 
@@ -142,80 +146,142 @@ Reads: `loc_growth_cnts_parcel` (parcel) · `telecom_features_block` (block↓) 
 
 ---
 
-## 4. `grain_transfer` — 🟡 PARTLY BUILT (spec-driven `promote` + bespoke CT runners)
+## 4. `grain_transfer` — ✅ BUILT (four CT runners, SQL-generating)
 
-The module now exists: a spec-driven `promote()` with BigQuery + DuckDB adapters covers
-the regular block→tract promotion, and the two bespoke parcel→tract spatial aggregations
-are ported as SQL runners. The FCC `*_ct` tables are still produced by the **legacy
-`feature_engg/` + `transfer/`** scripts pending migration onto `promote`. It feeds the
-**tract training frame** only.
+The module is complete. Four runners under `src/network_idx/grain_transfer/` produce the
+tract-grain tables, each emitting its BigQuery SQL via `--dry-run` into
+[`sql/grain_transfer/`](../sql/grain_transfer) (steps **12–15** of the `sql/README.md` run
+order). The legacy `feature_engg/` + `transfer/` CT bridge is **retired**: the three
+`fcc_fixed_*_ct` tables and `all_features_tract` are no longer produced or read.
 
-| Produces | Grain | Producer today | Tier | Status |
+This module feeds the **tract training frame** only — `features_ct` is what
+`modeling/run_training.py` fits on.
+
+| Produces (fully-qualified) | Grain | Producer | Step | Tier |
 | --- | --- | --- | --- | --- |
-| `PROJECT.teu_features.fcc_fixed_coverage_ct` | tract | `transfer/fcc_fixed_coverage_features_bq.py` | 🟢 Persist | legacy bridge |
-| `PROJECT.teu_features.fcc_fixed_coverage_ct_bucketed_speeds` | tract | `feature_engg/fcc_fixed_summary_ct_bucketing_bq.py` | 🟢 Persist | legacy bridge |
-| `PROJECT.teu_features.fcc_fixed_speeds_ct` | tract | `feature_engg/fcc_fixed_speeds_tract.py` (spec `FCC_SPEEDS_CT_SPEC` ready in `promote`) | 🟢 Persist | migrating |
-| `PROJECT.teu_features.loc_parcels_growth_ct` | tract | **`grain_transfer/location_growth_ct.py`** (port of `create_parcel_growth_agg_ct`) | 🟢 Persist | ✅ built |
-| `PROJECT.teu_features.rextag_distance_ct` | tract | **`grain_transfer/rextag_distance_ct.py`** (port of `create_fiber_agg_ct`) | 🟢 Persist | ✅ built |
-| `PROJECT.teu_features.all_features_tract` | tract | `feature_engg/all_features_tract_bq.py` | 🟢 Persist (modeling input) | legacy bridge |
+| `PROJECT.teu_features.loc_parcels_growth_ct` | tract | `grain_transfer/location_growth_ct.py` (port of `create_parcel_growth_agg_ct`) | 12 | 🟢 Persist |
+| `PROJECT.teu_features.rextag_distance_ct` | tract | `grain_transfer/rextag_distance_ct.py` (port of `create_fiber_agg_ct`) | 13 | 🟢 Persist |
+| `PROJECT.teu_features.telecom_features_ct` | tract | `grain_transfer/fcc_features_ct.py` | 14 | 🟢 Persist |
+| `PROJECT.teu_features.features_ct` | tract | `grain_transfer/features_ct.py` | 15 | 🟢 **Persist (modeling input)** |
 
-The two parcel→tract aggregations reach tract by a **spatial join** of the parcel centroid
-against `tract_geometry` (prod view), not a block-id crosswalk. `all_features_tract` also
-depends on `PROJECT.boundary.ct_tract_crosswalk_2020` (CT 2020→current GEOID remap) and
-`PROJECT.boundary.census_tract_optimized` (tract boundary).
+**How each one reaches tract grain** — three different mechanisms, worth keeping straight:
 
-> Reconciliation: `repo_structure.md` §8 lists all six as "Persist" (target). No tier
-> change here. Build status updated: the two previously-missing CT tables now have `src`
-> producers (ported from the authoritative stored procedures); the FCC `*_ct` tables
-> remain on the legacy bridge until migrated onto `promote`.
+- `loc_parcels_growth_ct` and `rextag_distance_ct` aggregate **parcel → tract** by a
+  *spatial join* of the parcel centroid against the tract-boundary geometry (deduplicated
+  to one tract per parcel), not by a block-id crosswalk.
+- `telecom_features_ct` rolls **block → tract** inputs and then applies the *same*
+  engineered-feature definition as the block table. Both `telecom_features_block` (step 5)
+  and `telecom_features_ct` render the shared `telecom_features.sql` body; each caller
+  supplies only a `joined_prelude` CTE with the per-grain inputs. This is what makes
+  block and tract telecom features structurally unable to drift (**ADR-0007**).
+- `features_ct` is pure assembly — the tract-grain analogue of `parcel_features`. It joins
+  every family's tract output into one row per tract carrying the **same thirteen model
+  features** as `parcel_features`, which is the train/score parity contract.
+
+Two properties of `features_ct` that matter downstream:
+
+- **`telecom_features_ct` is the join spine**; growth, rextag-distance, and `demo_pop_ct`
+  are LEFT JOINed, so a tract is never dropped because one family has no row for it. All
+  tracts are emitted — the training-population filter is applied in `modeling`, not here.
+- **Null fills are deliberately not applied.** The frame preserves genuine missingness;
+  `modeling` fills each feature per the scoring contract. (See `docs/QA.md` QA-1 — where
+  those fills land is an open data-quality issue.)
+
+Columns are aliased to the **model** names (the keys of `MODEL_TO_SCORING_FEATURE`) so
+`train.py` renames them to canonical scoring names in one step.
+
+> Reconciliation: `repo_structure.md` §8 previously carried a six-table CT inventory
+> (`fcc_fixed_speeds_ct`, `fcc_fixed_coverage_ct`, `fcc_fixed_coverage_ct_bucketed_speeds`,
+> `all_features_tract`, plus the two parcel→tract tables). The three FCC CT tables
+> collapsed into the single `telecom_features_ct` and `all_features_tract` was replaced by
+> `features_ct`; **`repo_structure.md` §8 has been updated to match** (2026-10-08). Tiers
+> are unchanged.
 >
-> ⚠️ Drift to reconcile: `rextag_distance_ct` reads `dist_to_nearest_fiber_m` (metres)
-> per the original proc, but the rearchitected rextag feature emits
-> `dist_to_nearest_fiber_miles`.
+> ✅ Resolved: the earlier drift note — `rextag_distance_ct` emitting
+> `dist_to_nearest_fiber_m` (metres) while the rearchitected rextag feature emits miles —
+> no longer applies; `features_ct` consumes the miles-denominated column.
+>
+> `promote.py` / `specs.py` / `adapters/` remain in the module as the spec-driven
+> block→tract helper; the four shipped runners are bespoke SQL, so `promote` is currently
+> **unused by the production path**.
 
 ---
 
 ## 5. `modeling` — fit scoring rules (ADR-0002)
 
+`modeling/run_training.py` is the single driver: load `features_ct` → fit → write the JSON
+run artifact → write `feature_weights` / `scaling_params` → register the run. `--dry-run`
+rehearses the whole thing and skips every write.
+
 | Produces | Grain | Producer | Tier |
 | --- | --- | --- | --- |
-| `PROJECT.teu_analytics.all_feature_engg_tract` | tract | `feature_engg/all_features_engg_tract_bq.py` (legacy; superseded once `train` reads `all_features_tract` directly) | 🔵 transient (analysis) |
-| `PROJECT.teu_analytics.results_clustering_k8_tract` | tract | modeling / notebook artifact | 🟡 analysis artifact |
-| model + SHAP joblibs `notebooks/data/{shap_values,X_shap}_k8_lightgbm_v1.joblib` | — | `modeling/train.py` | 🟢 versioned artifact |
-| `PROJECT.teu_analytics.feature_weights` (per `run_id`) | feature × run | `scoring/build_weights.py` → `modeling.fit_rules` | 🟢 **Persist (key artifact)** |
-| `PROJECT.teu_analytics.scaling_params` (per `run_id`) | feature × run | `scoring/build_scaling_params.py` → `modeling.fit_rules` | 🟢 **Persist (key artifact)** |
-| `PROJECT.teu_analytics.scoring_runs` (per `run_id`) | run | `modeling/registry.py` | 🟢 Persist (**new** run registry) |
+| `artifacts/runs/<run_id>.json` (weights, scaling params, fit metrics, source table, code version) | run | `modeling/artifacts.py` | 🟢 versioned artifact |
+| `PROJECT.teu_analytics.feature_weights` (per `run_id`) | feature × run | `modeling/run_training.py` → `scoring/weights.py :: write_feature_weights` | 🟢 **Persist (key artifact)** |
+| `PROJECT.teu_analytics.scaling_params` (per `run_id`) | feature × run | `modeling/run_training.py` → `scoring/scaling.py :: write_scaling_params` | 🟢 **Persist (key artifact)** |
+| `PROJECT.teu_analytics.scoring_runs` (per `run_id`) | run | `modeling/registry.py` | 🟢 Persist (run registry) |
+
+`modeling/train.py` fits the model and returns SHAP values **in memory**;
+`modeling/cluster_metrics.py` likewise computes cluster diagnostics (inertia, silhouette,
+Davies–Bouldin, Calinski–Harabasz) and returns them — neither persists anything. The run
+JSON is the durable record of a fit.
+
+Both rule tables are written **delete-then-append by `run_id`**, so multiple runs coexist
+in one table and scoring selects by `run_id`.
 
 > `scoring_runs` is additive to `repo_structure.md` §8 — the run ledger (model, k,
 > version, artifact table refs) that makes scoring self-describing.
+>
+> ⚠️ Stale config: `config/bigquery.py` still defines
+> `BQ_CLUSTERING_TRACTS = "results_clustering_k8_tract"` and
+> `BQ_FEATURES_ENGG_TRACT = "all_feature_engg_tract"`. **No `src` module writes or reads
+> either table** — they are leftovers of the notebook/legacy era and are candidates for
+> removal.
+>
+> Retired: `scoring/build_weights.py`. Weight extraction now lives in
+> `modeling.fit_rules`, driven by `run_training`, and the model is fit directly on
+> `features_ct`. `modeling/policy_lab.py` + `diagnostics.py` are the offline refit/
+> what-if harness (not part of the production path) — they are what `docs/QA.md`'s
+> refit grids are run through.
 
 ---
 
 ## 6. `scoring` — apply frozen rules → index + delivery
 
-| Produces | Grain | Producer | Tier |
-| --- | --- | --- | --- |
-| `PROJECT.teu_outputs.parcel_scores` | parcel | `scoring/parcel_score.py :: run` | 🟢 Persist |
-| `PROJECT.teu_outputs.fiber_idx_v1_parcel` | parcel | `scoring/parcel_score.py :: run_delivery` | 🟢 **Persist (delivery)** |
-| `PROJECT.teu_outputs.fiber_idx_v1_parcel_qa_minmax` | summary | `…:: run_qa` | 🔵 QA |
-| `PROJECT.teu_outputs.fiber_idx_v1_parcel_qa_fillrates` | summary | `…:: run_qa` | 🔵 QA |
-| `PROJECT.teu_outputs.fiber_idx_v1_parcel_qa_index_buckets` | summary | `…:: run_qa` | 🔵 QA |
+| Produces | Grain | Producer | Step | Tier |
+| --- | --- | --- | --- | --- |
+| `PROJECT.teu_analytics.scaling_params` (country-wide scan) | feature | `scoring/build_scaling_params.py` | 17 | 🟢 Persist |
+| `PROJECT.teu_outputs.parcel_scores` | parcel | `scoring/parcel_score.py :: run` | 18 | 🟢 Persist |
+| `PROJECT.teu_outputs.fiber_idx_v1_parcel` | parcel | `scoring/parcel_score.py :: run_delivery` | 19 | 🟢 **Persist (delivery)** |
 
 Scoring resolves *which* `feature_weights` / `scaling_params` tables to read from the
 `scoring_runs` registry (falls back to configured defaults for pre-registry runs).
+
+The **delivery** table is deliberately self-reconciling: it publishes all thirteen scaled
+features alongside their within-bucket weights and the three bucket weights, so a consumer
+can recompute the index from the row itself. Any adjustment applied to a sub-index but not
+visible in those columns would break that property — see `docs/QA.md` QA-1.
+
+> Retired: `parcel_score.py :: run_qa` and the three `fiber_idx_v1_parcel_qa_*` tables
+> (`_minmax`, `_fillrates`, `_index_buckets`). Those checks now live in `monitoring`
+> (`metrics.py` distributions/bands, `data_contract.py` fill gate, `parity.py`), which
+> returns dataclasses rather than persisting QA tables.
 
 ---
 
 ## 7. `monitoring` — read-only (writes no tables)
 
-Returns health dataclasses / flags; halts on the data-contract gate. No persisted
-outputs. Partial today: dasymetric conservation gate + telecom feature
-distributions/band counts done; input gate, score-side drift/parity, and
-`business_rollups` still pending.
+Returns health dataclasses / flags; halts on the data-contract gate. No persisted outputs.
+Built: `data_contract.py` (conservation + input gate), `metrics.py` (feature
+distributions/bands), `drift.py` (vs a baseline snapshot), `parity.py` (train/scoring
+parity), `business_rollups.py`.
 
-## 8. `validation` — ⚠️ NOT BUILT
+## 8. `validation` — 🟡 PARTLY BUILT
 
-Periodic construct-validity dossier (4 axes, ADR-0004). No persistent tables yet.
+Periodic construct-validity dossier (4 axes, ADR-0004). No persisted tables. Built:
+`validation/internal/` (`distribution`, `spatial`, `coherence`, `sensitivity`),
+`validation/external/anchors.py`, `validation/temporal/backtest.py`,
+`validation/expert/review.py`, and `validation/dossier.py` as the assembler. Deferred:
+external-data loaders (ACS, BEAD) and archived-snapshot wiring for the temporal axis.
 
 ---
 
@@ -224,15 +290,18 @@ Periodic construct-validity dossier (4 axes, ADR-0004). No persistent tables yet
 - 🟢 **Persist (source of truth):** `census_baf_block`, `census_acl_block`;
   `fcc_coverage_block`, `fcc_fixed_speeds_block`, `telecom_features_block`, `demo_pop_ct`,
   `loc_growth_cnts_parcel`, `loc_growth_distance_parcel`, `rextag_distance_parcel`,
-  `parcel_features`; all `*_ct` + `all_features_tract`; `feature_weights`,
-  `scaling_params`, `scoring_runs`; `parcel_scores`, `fiber_idx_v1_parcel`.
+  `parcel_features`; `loc_parcels_growth_ct`, `rextag_distance_ct`, `telecom_features_ct`,
+  `features_ct`; `feature_weights`, `scaling_params`, `scoring_runs`; `parcel_scores`,
+  `fiber_idx_v1_parcel`.
 - 🟡 **Rebuildable intermediate:** `fcc_coverage_summary`, `fcc_coverage_county_residuals`,
-  `int_rextag_fiberopticcables_optimized`, `loc_growth_parcel_concentrations_h3r7`,
-  `all_feature_engg_tract`, `results_clustering_k8_tract`.
-- 🔵 **Transient / staging / QA:** `fcc_coverage_block_parity`, `rextag_calculation_parcel`,
-  the three `fiber_idx_v1_parcel_qa_*`.
+  `int_rextag_fiberopticcables_optimized`, `loc_growth_parcel_concentrations_h3r7`.
+- 🔵 **Transient / staging:** `fcc_coverage_block_parity`, `rextag_calculation_parcel`.
 - ⚪ **External (data-eng owned, read-only):** all `clgx-idap-…prd-a990.*` FCC / neighborhood
   / geometry / rextag tables.
+- ⛔ **Retired (no longer produced or read):** `all_features_tract`,
+  `all_feature_engg_tract`, `fcc_fixed_coverage_ct`,
+  `fcc_fixed_coverage_ct_bucketed_speeds`, `fcc_fixed_speeds_ct`,
+  `results_clustering_k8_tract`, and the three `fiber_idx_v1_parcel_qa_*` tables.
 
 Open DE questions carry over from [`repo_structure.md`](./repo_structure.md) §8.3
 (env materialization, Census block persistence, contract-test scope, `run_id`

@@ -17,6 +17,12 @@ those steps are validated/run in the console.
 (`QueryJobConfig(dry_run=True)`) checks each module's assembled SQL against live
 table schemas — free, non-destructive, catches missing tables/columns/type errors.
 
+> ⚠️ **Step numbers below are this tracker's own and diverge from
+> [`sql/README.md`](../sql/README.md) at step 17+.** This tracker numbers
+> 17 `build_scaling_params` · 18 `build_weights` · 19 `parcel_score`; the SQL runbook
+> numbers 17 `scaling_params` · 18 `parcel_score` · 19 `delivery`. The runbook is the
+> execution contract — follow it when running the pipeline.
+
 ---
 
 ## Run sequence (console-driven setup)
@@ -71,7 +77,7 @@ Run each `sql/` script in the BigQuery console in this order, then report back s
 | 15 | `grain_transfer.features_ct` | VM | ✅ renders | `teu_features.features_ct` | ✅ **F7 verified resolved at CT grain**: `median_dist_nearest_fiber_miles` null 91% → 2.8% (85,395 tracts; median 0.27mi, p99 11.9mi, capped at 15mi); remaining nulls concentrate in PR/HI (zero rextag fiber) + genuine rural sparsity |
 | 16 | `features.parcel_features` | VM | ✅ bq-valid (14.93 GB) | `teu_features.parcel_features` | ✅ **rebuilt 2026-09-24 post-F7**: 154,563,179 rows, 17 cols; `dist_to_nearest_fiber_miles` null = 5,920,445 (3.8%, matches step-10 figure exactly — no rows lost in the join); `nearest_fiber_id` 0 numeric-leak (genuine `loc_id` strings); other family nulls unremarkable (cable/housing 0.09%, pop_ch 0.99%, hotspot 33% — different feature, untouched by this fix) |
 | 17 | `scoring.build_scaling_params` | VM | ✅ renders | `teu_analytics.scaling_params` | ✅ validated |
-| 18 | `scoring.build_weights` | VM | ✅ renders | `teu_analytics.feature_weights` | ✅ validated |
+| 18 | `scoring.build_weights` | VM | ✅ renders | `teu_analytics.feature_weights` | ✅ validated — ⚠️ **module since retired**; weight extraction now runs via `modeling.run_training` → `modeling.fit_rules` → `scoring.weights.write_feature_weights` |
 | 19 | `scoring.parcel_score` | VM | ✅ renders (weights baked) | `teu_outputs.parcel_scores` | ✅ validated |
 
 Monitoring and validation modules are pure Python (read + return); not SQL steps.
