@@ -3,11 +3,12 @@ Offline tests for the rextag fiber-optimize transform.
 
 These tests exercise the procedure rendering and the deploy-and-run dispatch without
 any BigQuery access. A fake client records the SQL it is asked to run, so the tests
-assert that the rendered procedure references the resolved names, injects the boundary
-UDF dataset and vertex threshold, carries the stable loc_id and assigns a within-run
-spatial_fiber_id, defines a stored procedure, and leaves no unresolved placeholders;
-that the call statement targets the same procedure; and that build deploys then runs,
-deploy_only deploys without running, and a dry run does neither.
+assert that the rendered script defines the subdivision UDFs before the procedure and
+calls them from the configured dataset, references the resolved names, injects the
+vertex threshold, carries the stable loc_id and assigns a within-run spatial_fiber_id,
+defines a stored procedure, and leaves no unresolved placeholders; that the call
+statement targets the same procedure; and that build deploys then runs, deploy_only
+deploys without running, and a dry run does neither.
 """
 from network_idx.constants import FIBER_SUBDIVIDE_MAX_VERTICES
 from network_idx.features.rextag.transform import fiber_optimize
@@ -32,7 +33,7 @@ def _render():
         proc_ref_="proj.ds.clean_optimize",
         output_table="proj.ds.optimized",
         input_view="proj.src.fiber_view",
-        boundary_dataset="boundary_ds",
+        udf_dataset="proj.udf_ds",
     )
 
 
@@ -41,7 +42,18 @@ def test_render_defines_procedure_and_substitutes_names():
     assert "CREATE OR REPLACE PROCEDURE `proj.ds.clean_optimize`()" in sql
     assert "`proj.ds.optimized`" in sql
     assert "`proj.src.fiber_view`" in sql
-    assert "`boundary_ds`.st_subdivide16" in sql
+
+
+def test_render_defines_subdivide_udfs_before_the_procedure_that_calls_them():
+    # The UDFs ship in the same script so the procedure never depends on a shared
+    # dataset that may not exist in the target project.
+    sql = _render()
+    udf4 = sql.index("CREATE OR REPLACE FUNCTION `proj.udf_ds.st_subdivide4`")
+    udf16 = sql.index("CREATE OR REPLACE FUNCTION `proj.udf_ds.st_subdivide16`")
+    proc = sql.index("CREATE OR REPLACE PROCEDURE")
+    assert udf4 < udf16 < proc
+    assert "`proj.udf_ds.st_subdivide16`(i.geometry)" in sql
+    assert "boundary" not in sql.split("CREATE OR REPLACE PROCEDURE")[1]
 
 
 def test_render_injects_subdivide_threshold():

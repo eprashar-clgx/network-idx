@@ -25,7 +25,6 @@ from network_idx.config import (
     GCS_ADC_JSON_PATH_EP_LOCAL,
     BQ_DATASET_TELECOM,
     BQ_TABLE_REXTAG_FIBER_OPTIMIZED,
-    BQ_DATASET_BOUNDARY,
 )
 from network_idx.constants import FIBER_SUBDIVIDE_MAX_VERTICES
 from network_idx.sources.registry import RAW_SOURCES_BQ
@@ -53,6 +52,16 @@ def output_table_ref() -> str:
     return f"{GCS_PROJECT_ID}.{BQ_DATASET_TELECOM}.{BQ_TABLE_REXTAG_FIBER_OPTIMIZED}"
 
 
+def udf_dataset_ref() -> str:
+    """
+    Return the dataset that hosts the st_subdivide4/st_subdivide16 UDFs.
+
+    The template defines these UDFs itself, alongside the procedure, rather than relying
+    on a pre-existing shared `boundary` dataset that does not exist in every project.
+    """
+    return f"{GCS_PROJECT_ID}.{BQ_DATASET_TELECOM}"
+
+
 def input_view_ref() -> str:
     """Return the fully qualified raw rextag fiber view from the registry."""
     return RAW_SOURCES_BQ[SOURCE_NAME].table_ref
@@ -62,23 +71,23 @@ def render_procedure_sql(
     proc_ref_: str,
     output_table: str,
     input_view: str,
-    boundary_dataset: str = BQ_DATASET_BOUNDARY,
+    udf_dataset: str | None = None,
     subdivide_max_vertices: int = FIBER_SUBDIVIDE_MAX_VERTICES,
 ) -> str:
     """
-    Render the CREATE OR REPLACE PROCEDURE statement that defines the transform.
+    Render the script that defines the subdivision UDFs and the transform procedure.
 
     This is a pure function: it reads the SQL template and substitutes the procedure
-    name, the output table, the input view, the dataset that hosts the subdivision UDF,
-    and the vertex threshold, performing no input or output of its own so it can be unit
-    tested.
+    name, the output table, the input view, the fully qualified dataset that hosts the
+    subdivision UDFs, and the vertex threshold, performing no input or output of its own
+    so it can be unit tested.
     """
     template = SQL_PATH.read_text()
     return template.format(
         proc_ref=proc_ref_,
         output_table=output_table,
         input_view=input_view,
-        boundary_dataset=boundary_dataset,
+        udf_dataset=udf_dataset or udf_dataset_ref(),
         subdivide_max_vertices=subdivide_max_vertices,
     )
 

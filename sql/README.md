@@ -152,3 +152,11 @@ python -m network_idx.features.telecom.transform.fcc_fixed_speeds_block --dry-ru
 ```
 The generator scripts used to build this folder capture that stdout and prepend
 the metadata banner.
+
+**Never hand-edit a file here to fix SQL — fix the template under `src/` and
+regenerate.** Each file is a copy; the Python pipeline runs the template, not the copy,
+so an edit made only here leaves the two paths disagreeing and is silently lost on the
+next regeneration. `tests/test_sql_runbook_parity.py` enforces this: it renders every
+feature and grain-transfer module and fails if any file's SQL differs from its template
+(only the banner and end-of-file whitespace are ignored). `sql/scoring/` is excluded
+because it is rendered from fitted weights in BigQuery — see §5.

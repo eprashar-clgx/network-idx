@@ -16,6 +16,46 @@
 -- assemble step can map the integer spatial_fiber_id used for the spatial join back to
 -- a stable, string id for the final, customer-facing nearest_fiber_id column.
 
+-- Step 1. Helper function to subdivide a geography into up to four hemispherical intersections.
+CREATE OR REPLACE FUNCTION `{udf_dataset}.st_subdivide4`(g GEOGRAPHY) 
+RETURNS ARRAY<GEOGRAPHY> AS (
+(
+  WITH centroid AS (
+    SELECT SAFE.ST_X(ST_CENTROID(g)) AS x, SAFE.ST_Y(ST_CENTROID(g)) AS y 
+  ),
+  hemis AS (
+    SELECT 
+      ST_MAKEPOLYGONORIENTED([ST_MAKELINE([ST_GEOGPOINT(x, y), ST_GEOGPOINT(x, 90), ST_GEOGPOINT(x+180, -y), ST_GEOGPOINT(x, -90)])]) AS west,
+      ST_MAKEPOLYGONORIENTED([ST_MAKELINE([ST_GEOGPOINT(x, y), ST_GEOGPOINT(x, -90), ST_GEOGPOINT(x+180, -y), ST_GEOGPOINT(x, 90)])]) AS east,
+      ST_MAKEPOLYGONORIENTED([ST_MAKELINE([ST_GEOGPOINT(x, y), ST_GEOGPOINT(x+90, 0), ST_GEOGPOINT(x+180, -y), ST_GEOGPOINT(x-90, 0)])]) AS north,
+      ST_MAKEPOLYGONORIENTED([ST_MAKELINE([ST_GEOGPOINT(x, y), ST_GEOGPOINT(x-90, 0), ST_GEOGPOINT(x+180, -y), ST_GEOGPOINT(x+90, 0)])]) AS south
+    FROM centroid
+    WHERE x IS NOT NULL AND y IS NOT NULL
+  )
+  SELECT IF(
+    ARRAY_LENGTH(ARRAY(SELECT 1 FROM hemis)) > 0, 
+    [
+      ST_INTERSECTION(g, ST_INTERSECTION(west, north)), 
+      ST_INTERSECTION(g, ST_INTERSECTION(east, north)),
+      ST_INTERSECTION(g, ST_INTERSECTION(west, south)),
+      ST_INTERSECTION(g, ST_INTERSECTION(east, south))
+    ],
+    [g]
+  )
+  FROM hemis
+)
+);
+
+-- Step 2. 16-part subdivision using the 4-part subdivision function
+CREATE OR REPLACE FUNCTION `{udf_dataset}.st_subdivide16`(g GEOGRAPHY) 
+RETURNS ARRAY<GEOGRAPHY> AS (
+(
+  SELECT ARRAY_CONCAT_AGG(`{udf_dataset}.st_subdivide4`(g1))
+  FROM UNNEST(`{udf_dataset}.st_subdivide4`(g)) AS g1
+)
+);
+
+-- Step 3. Optimization Procedure
 CREATE OR REPLACE PROCEDURE `{proc_ref}`()
 BEGIN
 
@@ -74,7 +114,7 @@ BEGIN
     FROM base i,
     UNNEST(
       CASE
-        WHEN i.num_points > {subdivide_max_vertices} THEN `{boundary_dataset}`.st_subdivide16(i.geometry)
+        WHEN i.num_points > {subdivide_max_vertices} THEN `{udf_dataset}.st_subdivide16`(i.geometry)
         ELSE [i.geometry]
       END
     ) AS subdivided_geom

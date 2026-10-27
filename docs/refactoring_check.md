@@ -128,7 +128,11 @@ Monitoring and validation modules are pure Python (read + return); not SQL steps
   inventory — cleanup candidates once the run is confirmed.
 - **F5 — `fiber_optimize` 400 on dry-run.** "Error validating procedure body" —
   the body references a prod rextag view + boundary UDF; validate in the console.
-  Not necessarily a code bug.
+  ✅ **Resolved — it was a code bug.** The procedure called `boundary.st_subdivide16`, a
+  UDF that does not exist in the target project. Daniel Gossett's PR #2 defined
+  `st_subdivide4`/`st_subdivide16` inline in `teu_telecom` in the `sql/` copy; the fix
+  was then lifted into the Python template so both paths agree, and
+  `tests/test_sql_runbook_parity.py` now guards against the two diverging again.
 
 - **F6 — Stale legacy output tables block `CREATE OR REPLACE` (found 2026-09-01).**
   `teu_telecom.fcc_coverage_county_residuals` already exists from **legacy** code
